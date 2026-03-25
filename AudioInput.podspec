@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'AudioInput'
-  s.version = '2.1.0'
+  s.version = '2.1.2'
   s.summary = 'Audio input capture plugin for Capacitor'
   s.license = 'MIT'
   s.homepage = 'https://github.com/edimuj/cordova-plugin-audioinput'

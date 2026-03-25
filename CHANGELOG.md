@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-03-25
+
+### Fixed
+- **normalize option ignored on native platforms** — Android always returned normalized floats and iOS always returned raw Int16, regardless of the `normalize` setting. Both platforms now correctly respect `normalize` and `normalizationFactor` options.
+- **start() required options in TypeScript** — `start(options?)` is now optional; it uses the configuration from `initialize()` if no options are passed.
+- **Lint errors** — Fixed `Function` type in `index.d.ts`, removed unused import in `web.ts`.
+
+### Changed
+- Applied Prettier formatting across all source files.
+- Updated README examples to show the recommended `initialize()` → `start()` pattern.
+
+## [2.1.1] - 2026-03-22
+
+### Fixed
+- **Capacitor 8 Gradle build** — Added Kotlin plugin to Android build classpath for Capacitor 8 compatibility.
+
+### Changed
+- Bumped `@capacitor/core` peer dependency to `^8.0.0`.
+
+## [2.1.0] - 2026-03-22
+
+### Added
+- **Capacitor 8 support** — Updated native wrappers and build config for Capacitor 8.x.
+
 ## [2.0.0] - 2025-11-10
 
 ### Added
