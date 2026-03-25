@@ -1,404 +1,437 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' data: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;"
+    />
     <title>AudioInput Test</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            margin: 5px;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        button:active {
-            background: #0056b3;
-        }
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        button.play-btn {
-            background: #28a745;
-        }
-        button.play-btn:active:not(:disabled) {
-            background: #1e7e34;
-        }
-        .level-meter-container {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 4px;
-        }
-        .level-meter-label {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 8px;
-        }
-        .level-meter {
-            width: 100%;
-            height: 30px;
-            background: #e9ecef;
-            border-radius: 4px;
-            overflow: hidden;
-            position: relative;
-        }
-        .level-meter-fill {
-            height: 100%;
-            background: linear-gradient(to right, #28a745, #ffc107, #dc3545);
-            transition: width 0.1s;
-            width: 0%;
-        }
-        .level-meter-value {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 12px;
-            font-weight: bold;
-            color: #333;
-            text-shadow: 0 0 3px white;
-        }
-        #status {
-            margin-top: 20px;
-            padding: 15px;
-            background: #e9ecef;
-            border-radius: 4px;
-            min-height: 100px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
-        .info {
-            background: #d1ecf1;
-            border-left: 4px solid #0c5460;
-            padding: 10px;
-            margin: 10px 0;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin: 15px 0;
-        }
-        .stat-box {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            text-align: center;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #666;
-        }
-        .stat-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          sans-serif;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333;
+        margin-bottom: 20px;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        margin: 5px;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      button:active {
+        background: #0056b3;
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      button.play-btn {
+        background: #28a745;
+      }
+      button.play-btn:active:not(:disabled) {
+        background: #1e7e34;
+      }
+      .level-meter-container {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 4px;
+      }
+      .level-meter-label {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 8px;
+      }
+      .level-meter {
+        width: 100%;
+        height: 30px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+      }
+      .level-meter-fill {
+        height: 100%;
+        background: linear-gradient(to right, #28a745, #ffc107, #dc3545);
+        transition: width 0.1s;
+        width: 0%;
+      }
+      .level-meter-value {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        font-weight: bold;
+        color: #333;
+        text-shadow: 0 0 3px white;
+      }
+      #status {
+        margin-top: 20px;
+        padding: 15px;
+        background: #e9ecef;
+        border-radius: 4px;
+        min-height: 100px;
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .info {
+        background: #d1ecf1;
+        border-left: 4px solid #0c5460;
+        padding: 10px;
+        margin: 10px 0;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 15px 0;
+      }
+      .stat-box {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        text-align: center;
+      }
+      .stat-label {
+        font-size: 12px;
+        color: #666;
+      }
+      .stat-value {
+        font-size: 20px;
+        font-weight: bold;
+        color: #333;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>AudioInput Plugin Test</h1>
+      <h1>AudioInput Plugin Test</h1>
 
-        <div class="info">
-            <strong>Test the cordova-plugin-audioinput</strong><br>
-            This app tests audio capture with playback and level monitoring.
+      <div class="info">
+        <strong>Test the cordova-plugin-audioinput</strong><br />
+        This app tests audio capture with playback and level monitoring.
+      </div>
+
+      <div>
+        <button id="startBtn" onclick="startCapture()">▶ Start Capture</button>
+        <button id="stopBtn" onclick="stopCapture()" disabled>
+          ⬛ Stop Capture
+        </button>
+        <button id="playBtn" class="play-btn" onclick="playback()" disabled>
+          🔊 Play Recording
+        </button>
+      </div>
+
+      <div>
+        <button onclick="getPermission()">Request Permission</button>
+        <button onclick="checkMicrophonePermission()">Check Permission</button>
+      </div>
+
+      <div class="level-meter-container">
+        <div class="level-meter-label">Audio Level</div>
+        <div class="level-meter">
+          <div class="level-meter-fill" id="levelFill"></div>
+          <div class="level-meter-value" id="levelValue">0%</div>
         </div>
+      </div>
 
-        <div>
-            <button id="startBtn" onclick="startCapture()">▶ Start Capture</button>
-            <button id="stopBtn" onclick="stopCapture()" disabled>⬛ Stop Capture</button>
-            <button id="playBtn" class="play-btn" onclick="playback()" disabled>🔊 Play Recording</button>
+      <div class="stats">
+        <div class="stat-box">
+          <div class="stat-label">Chunks Received</div>
+          <div class="stat-value" id="chunkCount">0</div>
         </div>
-
-        <div>
-            <button onclick="getPermission()">Request Permission</button>
-            <button onclick="checkMicrophonePermission()">Check Permission</button>
+        <div class="stat-box">
+          <div class="stat-label">Recording Duration</div>
+          <div class="stat-value" id="duration">0.0s</div>
         </div>
+      </div>
 
-        <div class="level-meter-container">
-            <div class="level-meter-label">Audio Level</div>
-            <div class="level-meter">
-                <div class="level-meter-fill" id="levelFill"></div>
-                <div class="level-meter-value" id="levelValue">0%</div>
-            </div>
-        </div>
-
-        <div class="stats">
-            <div class="stat-box">
-                <div class="stat-label">Chunks Received</div>
-                <div class="stat-value" id="chunkCount">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Recording Duration</div>
-                <div class="stat-value" id="duration">0.0s</div>
-            </div>
-        </div>
-
-        <div id="status">Waiting for device ready...</div>
+      <div id="status">Waiting for device ready...</div>
     </div>
 
     <script type="text/javascript" src="cordova.js"></script>
     <script type="text/javascript">
-        let captureStarted = false;
-        let audioDataCount = 0;
-        let audioBuffer = [];
-        let audioContext = null;
-        let sampleRate = 44100;
-        let startTime = null;
+      let captureStarted = false;
+      let audioDataCount = 0;
+      let audioBuffer = [];
+      let audioContext = null;
+      let sampleRate = 44100;
+      let startTime = null;
 
-        function log(message) {
-            const status = document.getElementById('status');
-            const timestamp = new Date().toLocaleTimeString();
-            status.textContent += `[${timestamp}] ${message}\n`;
-            status.scrollTop = status.scrollHeight;
-            console.log(message);
+      function log(message) {
+        const status = document.getElementById('status');
+        const timestamp = new Date().toLocaleTimeString();
+        status.textContent += `[${timestamp}] ${message}\n`;
+        status.scrollTop = status.scrollHeight;
+        console.log(message);
+      }
+
+      function updateButtons() {
+        document.getElementById('startBtn').disabled = captureStarted;
+        document.getElementById('stopBtn').disabled = !captureStarted;
+        document.getElementById('playBtn').disabled = audioBuffer.length === 0;
+      }
+
+      function updateStats() {
+        document.getElementById('chunkCount').textContent = audioDataCount;
+        if (startTime && captureStarted) {
+          const duration = (Date.now() - startTime) / 1000;
+          document.getElementById('duration').textContent =
+            duration.toFixed(1) + 's';
         }
+      }
 
-        function updateButtons() {
-            document.getElementById('startBtn').disabled = captureStarted;
-            document.getElementById('stopBtn').disabled = !captureStarted;
-            document.getElementById('playBtn').disabled = audioBuffer.length === 0;
+      function updateLevel(data) {
+        if (!data || data.length === 0) return;
+
+        // Calculate RMS level
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+          sum += data[i] * data[i];
         }
+        const rms = Math.sqrt(sum / data.length);
+        const level = Math.min(100, Math.round(rms * 100));
 
-        function updateStats() {
-            document.getElementById('chunkCount').textContent = audioDataCount;
-            if (startTime && captureStarted) {
-                const duration = (Date.now() - startTime) / 1000;
-                document.getElementById('duration').textContent = duration.toFixed(1) + 's';
-            }
-        }
+        document.getElementById('levelFill').style.width = level + '%';
+        document.getElementById('levelValue').textContent = level + '%';
+      }
 
-        function updateLevel(data) {
-            if (!data || data.length === 0) return;
-
-            // Calculate RMS level
-            let sum = 0;
-            for (let i = 0; i < data.length; i++) {
-                sum += data[i] * data[i];
-            }
-            const rms = Math.sqrt(sum / data.length);
-            const level = Math.min(100, Math.round(rms * 100));
-
-            document.getElementById('levelFill').style.width = level + '%';
-            document.getElementById('levelValue').textContent = level + '%';
-        }
-
-        function getPermission() {
-            log('Requesting microphone permission...');
-            if (window.audioinput && audioinput.checkMicrophonePermission) {
-                audioinput.checkMicrophonePermission(
-                    function(hasPermission) {
-                        if (hasPermission) {
-                            log('✓ Permission already granted');
-                        } else {
-                            log('Requesting permission...');
-                            audioinput.getMicrophonePermission(
-                                function(granted) {
-                                    log(granted ? '✓ Permission granted' : '✗ Permission denied');
-                                },
-                                function(error) {
-                                    log('✗ Error requesting permission: ' + error);
-                                }
-                            );
-                        }
-                    },
-                    function(error) {
-                        log('✗ Error checking permission: ' + error);
-                    }
+      function getPermission() {
+        log('Requesting microphone permission...');
+        if (window.audioinput && audioinput.checkMicrophonePermission) {
+          audioinput.checkMicrophonePermission(
+            function (hasPermission) {
+              if (hasPermission) {
+                log('✓ Permission already granted');
+              } else {
+                log('Requesting permission...');
+                audioinput.getMicrophonePermission(
+                  function (granted) {
+                    log(
+                      granted ? '✓ Permission granted' : '✗ Permission denied',
+                    );
+                  },
+                  function (error) {
+                    log('✗ Error requesting permission: ' + error);
+                  },
                 );
-            } else {
-                log('✗ Permission API not available');
-            }
+              }
+            },
+            function (error) {
+              log('✗ Error checking permission: ' + error);
+            },
+          );
+        } else {
+          log('✗ Permission API not available');
+        }
+      }
+
+      function checkMicrophonePermission() {
+        log('Checking microphone permission...');
+        if (window.audioinput && audioinput.checkMicrophonePermission) {
+          audioinput.checkMicrophonePermission(
+            function (hasPermission) {
+              log(hasPermission ? '✓ Has permission' : '✗ No permission');
+            },
+            function (error) {
+              log('✗ Error: ' + error);
+            },
+          );
+        } else {
+          log('✗ Check permission API not available');
+        }
+      }
+
+      function startCapture() {
+        log('Starting audio capture...');
+        audioDataCount = 0;
+        audioBuffer = [];
+        startTime = Date.now();
+        document.getElementById('duration').textContent = '0.0s';
+        document.getElementById('chunkCount').textContent = '0';
+
+        if (!window.audioinput) {
+          log('✗ AudioInput plugin not found!');
+          return;
         }
 
-        function checkMicrophonePermission() {
-            log('Checking microphone permission...');
-            if (window.audioinput && audioinput.checkMicrophonePermission) {
-                audioinput.checkMicrophonePermission(
-                    function(hasPermission) {
-                        log(hasPermission ? '✓ Has permission' : '✗ No permission');
-                    },
-                    function(error) {
-                        log('✗ Error: ' + error);
-                    }
-                );
-            } else {
-                log('✗ Check permission API not available');
-            }
+        // Initialize Web Audio API
+        if (!audioContext) {
+          try {
+            audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)();
+            log('✓ Web Audio API initialized');
+          } catch (e) {
+            log('✗ Web Audio API not available: ' + e.message);
+          }
         }
 
-        function startCapture() {
-            log('Starting audio capture...');
-            audioDataCount = 0;
-            audioBuffer = [];
-            startTime = Date.now();
-            document.getElementById('duration').textContent = '0.0s';
-            document.getElementById('chunkCount').textContent = '0';
+        const captureCfg = {
+          sampleRate: 44100,
+          bufferSize: 4096,
+          channels: 1,
+          format: 'PCM_16BIT',
+          normalize: true,
+          normalizationFactor: 32767.0,
+        };
+        sampleRate = captureCfg.sampleRate;
 
-            if (!window.audioinput) {
-                log('✗ AudioInput plugin not found!');
-                return;
-            }
+        audioinput.start(captureCfg);
 
-            // Initialize Web Audio API
-            if (!audioContext) {
-                try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    log('✓ Web Audio API initialized');
-                } catch (e) {
-                    log('✗ Web Audio API not available: ' + e.message);
-                }
-            }
+        // Listen for audio input events
+        window.addEventListener('audioinput', onAudioInput, false);
+        window.addEventListener('audioinputerror', onAudioInputError, false);
 
-            const captureCfg = {
-                sampleRate: 44100,
-                bufferSize: 4096,
-                channels: 1,
-                format: 'PCM_16BIT',
-                normalize: true,
-                normalizationFactor: 32767.0
-            };
-            sampleRate = captureCfg.sampleRate;
+        captureStarted = true;
+        updateButtons();
+        log('✓ Capture started (44.1kHz, Mono, 16-bit)');
+      }
 
-            audioinput.start(captureCfg);
+      function stopCapture() {
+        log('Stopping audio capture...');
 
-            // Listen for audio input events
-            window.addEventListener('audioinput', onAudioInput, false);
-            window.addEventListener('audioinputerror', onAudioInputError, false);
+        if (window.audioinput) {
+          audioinput.stop();
+          window.removeEventListener('audioinput', onAudioInput, false);
+          window.removeEventListener(
+            'audioinputerror',
+            onAudioInputError,
+            false,
+          );
 
-            captureStarted = true;
-            updateButtons();
-            log('✓ Capture started (44.1kHz, Mono, 16-bit)');
+          const duration = audioBuffer.length / sampleRate;
+          log('✓ Capture stopped');
+          log(`  Received ${audioDataCount} chunks`);
+          log(`  Duration: ${duration.toFixed(2)} seconds`);
+          log(`  Samples: ${audioBuffer.length}`);
+          log('  Ready for playback!');
         }
 
-        function stopCapture() {
-            log('Stopping audio capture...');
+        captureStarted = false;
+        startTime = null;
+        updateButtons();
 
-            if (window.audioinput) {
-                audioinput.stop();
-                window.removeEventListener('audioinput', onAudioInput, false);
-                window.removeEventListener('audioinputerror', onAudioInputError, false);
+        // Reset level meter
+        document.getElementById('levelFill').style.width = '0%';
+        document.getElementById('levelValue').textContent = '0%';
+      }
 
-                const duration = audioBuffer.length / sampleRate;
-                log('✓ Capture stopped');
-                log(`  Received ${audioDataCount} chunks`);
-                log(`  Duration: ${duration.toFixed(2)} seconds`);
-                log(`  Samples: ${audioBuffer.length}`);
-                log('  Ready for playback!');
-            }
+      function onAudioInput(evt) {
+        audioDataCount++;
 
-            captureStarted = false;
-            startTime = null;
-            updateButtons();
+        if (evt.data) {
+          // Store audio data for playback
+          audioBuffer = audioBuffer.concat(Array.from(evt.data));
 
-            // Reset level meter
-            document.getElementById('levelFill').style.width = '0%';
-            document.getElementById('levelValue').textContent = '0%';
+          // Update level meter
+          updateLevel(evt.data);
+
+          // Update stats
+          updateStats();
+
+          // Log periodically
+          if (audioDataCount % 20 === 0) {
+            const duration = audioBuffer.length / sampleRate;
+            log(
+              `Recording: ${duration.toFixed(1)}s (${audioDataCount} chunks)`,
+            );
+          }
+        }
+      }
+
+      function onAudioInputError(error) {
+        log('✗ Audio input error: ' + JSON.stringify(error));
+      }
+
+      function playback() {
+        if (audioBuffer.length === 0) {
+          log('✗ No audio data to play');
+          return;
         }
 
-        function onAudioInput(evt) {
-            audioDataCount++;
-
-            if (evt.data) {
-                // Store audio data for playback
-                audioBuffer = audioBuffer.concat(Array.from(evt.data));
-
-                // Update level meter
-                updateLevel(evt.data);
-
-                // Update stats
-                updateStats();
-
-                // Log periodically
-                if (audioDataCount % 20 === 0) {
-                    const duration = audioBuffer.length / sampleRate;
-                    log(`Recording: ${duration.toFixed(1)}s (${audioDataCount} chunks)`);
-                }
-            }
+        if (!audioContext) {
+          log('✗ Web Audio API not available');
+          return;
         }
 
-        function onAudioInputError(error) {
-            log('✗ Audio input error: ' + JSON.stringify(error));
+        log('▶ Playing back recorded audio...');
+
+        try {
+          // Create audio buffer
+          const buffer = audioContext.createBuffer(
+            1,
+            audioBuffer.length,
+            sampleRate,
+          );
+          const channelData = buffer.getChannelData(0);
+
+          // Copy audio data
+          for (let i = 0; i < audioBuffer.length; i++) {
+            channelData[i] = audioBuffer[i];
+          }
+
+          // Create source and play
+          const source = audioContext.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioContext.destination);
+
+          source.onended = function () {
+            log('✓ Playback finished');
+          };
+
+          source.start(0);
+          log(
+            '✓ Playing ' +
+              (audioBuffer.length / sampleRate).toFixed(2) +
+              ' seconds of audio',
+          );
+        } catch (e) {
+          log('✗ Playback error: ' + e.message);
         }
+      }
 
-        function playback() {
-            if (audioBuffer.length === 0) {
-                log('✗ No audio data to play');
-                return;
-            }
+      // Device ready event
+      document.addEventListener(
+        'deviceready',
+        function () {
+          log('✓ Device ready');
+          log(
+            '✓ Cordova version: ' +
+              (window.cordova ? cordova.version : 'unknown'),
+          );
 
-            if (!audioContext) {
-                log('✗ Web Audio API not available');
-                return;
-            }
-
-            log('▶ Playing back recorded audio...');
-
-            try {
-                // Create audio buffer
-                const buffer = audioContext.createBuffer(1, audioBuffer.length, sampleRate);
-                const channelData = buffer.getChannelData(0);
-
-                // Copy audio data
-                for (let i = 0; i < audioBuffer.length; i++) {
-                    channelData[i] = audioBuffer[i];
-                }
-
-                // Create source and play
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContext.destination);
-
-                source.onended = function() {
-                    log('✓ Playback finished');
-                };
-
-                source.start(0);
-                log('✓ Playing ' + (audioBuffer.length / sampleRate).toFixed(2) + ' seconds of audio');
-            } catch (e) {
-                log('✗ Playback error: ' + e.message);
-            }
-        }
-
-        // Device ready event
-        document.addEventListener('deviceready', function() {
-            log('✓ Device ready');
-            log('✓ Cordova version: ' + (window.cordova ? cordova.version : 'unknown'));
-
-            if (window.audioinput) {
-                log('✓ AudioInput plugin loaded');
-                log('Plugin methods: ' + Object.keys(window.audioinput).join(', '));
-            } else {
-                log('✗ AudioInput plugin NOT found!');
-            }
-        }, false);
+          if (window.audioinput) {
+            log('✓ AudioInput plugin loaded');
+            log('Plugin methods: ' + Object.keys(window.audioinput).join(', '));
+          } else {
+            log('✗ AudioInput plugin NOT found!');
+          }
+        },
+        false,
+      );
     </script>
-</body>
+  </body>
 </html>

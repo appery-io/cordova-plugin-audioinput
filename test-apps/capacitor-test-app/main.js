@@ -10,261 +10,277 @@ let startTime = null;
 let audioDataListener = null;
 let audioErrorListener = null;
 
-window.log = function(message, type = 'info') {
-    const status = document.getElementById('status');
-    const timestamp = new Date().toLocaleTimeString();
-    const icon = {
-        'success': '✓',
-        'error': '✗',
-        'info': 'ℹ',
-        'warning': '⚠'
+window.log = function (message, type = 'info') {
+  const status = document.getElementById('status');
+  const timestamp = new Date().toLocaleTimeString();
+  const icon =
+    {
+      success: '✓',
+      error: '✗',
+      info: 'ℹ',
+      warning: '⚠',
     }[type] || '';
 
-    const entry = document.createElement('div');
-    entry.className = `log-entry log-${type}`;
-    entry.textContent = `[${timestamp}] ${icon} ${message}`;
-    status.appendChild(entry);
-    status.scrollTop = status.scrollHeight;
+  const entry = document.createElement('div');
+  entry.className = `log-entry log-${type}`;
+  entry.textContent = `[${timestamp}] ${icon} ${message}`;
+  status.appendChild(entry);
+  status.scrollTop = status.scrollHeight;
 
-    console.log(`[${type}] ${message}`);
-}
+  console.log(`[${type}] ${message}`);
+};
 
-window.clearLog = function() {
-    document.getElementById('status').innerHTML = '';
-    log('Log cleared', 'info');
-}
+window.clearLog = function () {
+  document.getElementById('status').innerHTML = '';
+  log('Log cleared', 'info');
+};
 
 function updateButtons() {
-    document.getElementById('startBtn').disabled = captureStarted;
-    document.getElementById('stopBtn').disabled = !captureStarted;
-    document.getElementById('playBtn').disabled = audioBuffer.length === 0;
+  document.getElementById('startBtn').disabled = captureStarted;
+  document.getElementById('stopBtn').disabled = !captureStarted;
+  document.getElementById('playBtn').disabled = audioBuffer.length === 0;
 }
 
 function updateStats() {
-    document.getElementById('chunkCount').textContent = audioDataCount;
-    if (startTime && captureStarted) {
-        const duration = (Date.now() - startTime) / 1000;
-        document.getElementById('duration').textContent = duration.toFixed(1) + 's';
-    }
+  document.getElementById('chunkCount').textContent = audioDataCount;
+  if (startTime && captureStarted) {
+    const duration = (Date.now() - startTime) / 1000;
+    document.getElementById('duration').textContent = duration.toFixed(1) + 's';
+  }
 }
 
 function updateLevel(data) {
-    if (!data || data.length === 0) return;
+  if (!data || data.length === 0) return;
 
-    // Calculate RMS level
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) {
-        sum += data[i] * data[i];
-    }
-    const rms = Math.sqrt(sum / data.length);
-    const level = Math.min(100, Math.round(rms * 100));
+  // Calculate RMS level
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    sum += data[i] * data[i];
+  }
+  const rms = Math.sqrt(sum / data.length);
+  const level = Math.min(100, Math.round(rms * 100));
 
-    document.getElementById('levelFill').style.width = level + '%';
-    document.getElementById('levelValue').textContent = level + '%';
+  document.getElementById('levelFill').style.width = level + '%';
+  document.getElementById('levelValue').textContent = level + '%';
 }
 
-window.getPermission = async function() {
-    log('Requesting microphone permission...', 'info');
+window.getPermission = async function () {
+  log('Requesting microphone permission...', 'info');
 
+  try {
+    const result = await AudioInput.checkMicrophonePermission();
+    if (result.granted) {
+      log('Permission already granted', 'success');
+    } else {
+      log('Requesting permission...', 'info');
+      const permResult = await AudioInput.getMicrophonePermission();
+      log(
+        permResult.granted ? 'Permission granted' : 'Permission denied',
+        permResult.granted ? 'success' : 'error',
+      );
+    }
+  } catch (error) {
+    log('Error with permissions: ' + error.message, 'error');
+  }
+};
+
+window.checkMicrophonePermission = async function () {
+  log('Checking microphone permission...', 'info');
+
+  try {
+    const result = await AudioInput.checkMicrophonePermission();
+    log(
+      result.granted ? 'Has microphone permission' : 'No microphone permission',
+      result.granted ? 'success' : 'warning',
+    );
+  } catch (error) {
+    log('Error checking permission: ' + error.message, 'error');
+  }
+};
+
+window.startCapture = async function () {
+  log('Starting audio capture...', 'info');
+  audioDataCount = 0;
+  audioBuffer = [];
+  startTime = Date.now();
+  document.getElementById('duration').textContent = '0.0s';
+  document.getElementById('chunkCount').textContent = '0';
+
+  // Initialize Web Audio API
+  if (!audioContext) {
     try {
-        const result = await AudioInput.checkMicrophonePermission();
-        if (result.granted) {
-            log('Permission already granted', 'success');
-        } else {
-            log('Requesting permission...', 'info');
-            const permResult = await AudioInput.getMicrophonePermission();
-            log(permResult.granted ? 'Permission granted' : 'Permission denied',
-                permResult.granted ? 'success' : 'error');
-        }
-    } catch (error) {
-        log('Error with permissions: ' + error.message, 'error');
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      log('Web Audio API initialized', 'success');
+    } catch (e) {
+      log('Web Audio API not available: ' + e.message, 'error');
     }
-}
+  }
 
-window.checkMicrophonePermission = async function() {
-    log('Checking microphone permission...', 'info');
+  const captureCfg = {
+    sampleRate: 44100,
+    bufferSize: 4096,
+    channels: 1,
+    format: 'PCM_16BIT',
+    normalize: true,
+    normalizationFactor: 32767.0,
+  };
+  sampleRate = captureCfg.sampleRate;
 
-    try {
-        const result = await AudioInput.checkMicrophonePermission();
-        log(result.granted ? 'Has microphone permission' : 'No microphone permission',
-            result.granted ? 'success' : 'warning');
-    } catch (error) {
-        log('Error checking permission: ' + error.message, 'error');
+  try {
+    // Remove old listeners if any
+    if (audioDataListener) {
+      await audioDataListener.remove();
     }
-}
-
-window.startCapture = async function() {
-    log('Starting audio capture...', 'info');
-    audioDataCount = 0;
-    audioBuffer = [];
-    startTime = Date.now();
-    document.getElementById('duration').textContent = '0.0s';
-    document.getElementById('chunkCount').textContent = '0';
-
-    // Initialize Web Audio API
-    if (!audioContext) {
-        try {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            log('Web Audio API initialized', 'success');
-        } catch (e) {
-            log('Web Audio API not available: ' + e.message, 'error');
-        }
+    if (audioErrorListener) {
+      await audioErrorListener.remove();
     }
 
-    const captureCfg = {
-        sampleRate: 44100,
-        bufferSize: 4096,
-        channels: 1,
-        format: 'PCM_16BIT',
-        normalize: true,
-        normalizationFactor: 32767.0
-    };
-    sampleRate = captureCfg.sampleRate;
+    // Add event listeners
+    audioDataListener = await AudioInput.addListener('audioData', event => {
+      onAudioInput(event);
+    });
 
-    try {
-        // Remove old listeners if any
-        if (audioDataListener) {
-            await audioDataListener.remove();
-        }
-        if (audioErrorListener) {
-            await audioErrorListener.remove();
-        }
+    audioErrorListener = await AudioInput.addListener('audioError', event => {
+      onAudioInputError(event);
+    });
 
-        // Add event listeners
-        audioDataListener = await AudioInput.addListener('audioData', (event) => {
-            onAudioInput(event);
-        });
+    // Start capture
+    await AudioInput.start(captureCfg);
 
-        audioErrorListener = await AudioInput.addListener('audioError', (event) => {
-            onAudioInputError(event);
-        });
+    captureStarted = true;
+    updateButtons();
+    log('Capture started (44.1kHz, Mono, 16-bit)', 'success');
+  } catch (error) {
+    log('Failed to start capture: ' + error.message, 'error');
+  }
+};
 
-        // Start capture
-        await AudioInput.start(captureCfg);
+window.stopCapture = async function () {
+  log('Stopping audio capture...', 'info');
 
-        captureStarted = true;
-        updateButtons();
-        log('Capture started (44.1kHz, Mono, 16-bit)', 'success');
-    } catch (error) {
-        log('Failed to start capture: ' + error.message, 'error');
+  try {
+    await AudioInput.stop();
+
+    // Remove listeners
+    if (audioDataListener) {
+      await audioDataListener.remove();
+      audioDataListener = null;
     }
-}
-
-window.stopCapture = async function() {
-    log('Stopping audio capture...', 'info');
-
-    try {
-        await AudioInput.stop();
-
-        // Remove listeners
-        if (audioDataListener) {
-            await audioDataListener.remove();
-            audioDataListener = null;
-        }
-        if (audioErrorListener) {
-            await audioErrorListener.remove();
-            audioErrorListener = null;
-        }
-
-        const duration = audioBuffer.length / sampleRate;
-        log('Capture stopped', 'success');
-        log(`  Received ${audioDataCount} chunks`, 'info');
-        log(`  Duration: ${duration.toFixed(2)} seconds`, 'info');
-        log(`  Samples: ${audioBuffer.length}`, 'info');
-        log('  Ready for playback!', 'info');
-
-        captureStarted = false;
-        startTime = null;
-        updateButtons();
-
-        // Reset level meter
-        document.getElementById('levelFill').style.width = '0%';
-        document.getElementById('levelValue').textContent = '0%';
-    } catch (error) {
-        log('Failed to stop capture: ' + error.message, 'error');
+    if (audioErrorListener) {
+      await audioErrorListener.remove();
+      audioErrorListener = null;
     }
-}
+
+    const duration = audioBuffer.length / sampleRate;
+    log('Capture stopped', 'success');
+    log(`  Received ${audioDataCount} chunks`, 'info');
+    log(`  Duration: ${duration.toFixed(2)} seconds`, 'info');
+    log(`  Samples: ${audioBuffer.length}`, 'info');
+    log('  Ready for playback!', 'info');
+
+    captureStarted = false;
+    startTime = null;
+    updateButtons();
+
+    // Reset level meter
+    document.getElementById('levelFill').style.width = '0%';
+    document.getElementById('levelValue').textContent = '0%';
+  } catch (error) {
+    log('Failed to stop capture: ' + error.message, 'error');
+  }
+};
 
 function onAudioInput(event) {
-    audioDataCount++;
+  audioDataCount++;
 
-    if (event.data) {
-        // Store audio data for playback
-        audioBuffer = audioBuffer.concat(Array.from(event.data));
+  if (event.data) {
+    // Store audio data for playback
+    audioBuffer = audioBuffer.concat(Array.from(event.data));
 
-        // Update level meter
-        updateLevel(event.data);
+    // Update level meter
+    updateLevel(event.data);
 
-        // Update stats
-        updateStats();
+    // Update stats
+    updateStats();
 
-        // Log periodically
-        if (audioDataCount % 20 === 0) {
-            const duration = audioBuffer.length / sampleRate;
-            log(`Recording: ${duration.toFixed(1)}s (${audioDataCount} chunks)`, 'info');
-        }
+    // Log periodically
+    if (audioDataCount % 20 === 0) {
+      const duration = audioBuffer.length / sampleRate;
+      log(
+        `Recording: ${duration.toFixed(1)}s (${audioDataCount} chunks)`,
+        'info',
+      );
     }
+  }
 }
 
 function onAudioInputError(event) {
-    log('Audio input error: ' + (event.message || JSON.stringify(event)), 'error');
+  log(
+    'Audio input error: ' + (event.message || JSON.stringify(event)),
+    'error',
+  );
 }
 
-window.playback = function() {
-    if (audioBuffer.length === 0) {
-        log('No audio data to play', 'error');
-        return;
+window.playback = function () {
+  if (audioBuffer.length === 0) {
+    log('No audio data to play', 'error');
+    return;
+  }
+
+  if (!audioContext) {
+    log('Web Audio API not available', 'error');
+    return;
+  }
+
+  log('Playing back recorded audio...', 'info');
+
+  try {
+    // Create audio buffer
+    const buffer = audioContext.createBuffer(1, audioBuffer.length, sampleRate);
+    const channelData = buffer.getChannelData(0);
+
+    // Copy audio data
+    for (let i = 0; i < audioBuffer.length; i++) {
+      channelData[i] = audioBuffer[i];
     }
 
-    if (!audioContext) {
-        log('Web Audio API not available', 'error');
-        return;
-    }
+    // Create source and play
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
 
-    log('Playing back recorded audio...', 'info');
+    source.onended = function () {
+      log('Playback finished', 'success');
+    };
 
-    try {
-        // Create audio buffer
-        const buffer = audioContext.createBuffer(1, audioBuffer.length, sampleRate);
-        const channelData = buffer.getChannelData(0);
-
-        // Copy audio data
-        for (let i = 0; i < audioBuffer.length; i++) {
-            channelData[i] = audioBuffer[i];
-        }
-
-        // Create source and play
-        const source = audioContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioContext.destination);
-
-        source.onended = function() {
-            log('Playback finished', 'success');
-        };
-
-        source.start(0);
-        log('Playing ' + (audioBuffer.length / sampleRate).toFixed(2) + ' seconds of audio', 'success');
-    } catch (e) {
-        log('Playback error: ' + e.message, 'error');
-    }
-}
+    source.start(0);
+    log(
+      'Playing ' +
+        (audioBuffer.length / sampleRate).toFixed(2) +
+        ' seconds of audio',
+      'success',
+    );
+  } catch (e) {
+    log('Playback error: ' + e.message, 'error');
+  }
+};
 
 // Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', async function() {
-    log('DOM Content Loaded', 'info');
-    log(`Platform: ${Capacitor.getPlatform()}`, 'info');
-    log(`Native: ${Capacitor.isNativePlatform()}`, 'info');
+document.addEventListener('DOMContentLoaded', async function () {
+  log('DOM Content Loaded', 'info');
+  log(`Platform: ${Capacitor.getPlatform()}`, 'info');
+  log(`Native: ${Capacitor.isNativePlatform()}`, 'info');
 
-    // Check for plugin
-    setTimeout(async () => {
-        try {
-            // Try to check permissions to verify plugin is loaded
-            await AudioInput.checkMicrophonePermission();
-            log('AudioInput plugin loaded', 'success');
-        } catch (error) {
-            log('AudioInput plugin NOT found!', 'error');
-            log('Make sure to install the plugin and sync platforms', 'warning');
-            log('Error: ' + error.message, 'error');
-        }
-    }, 500);
+  // Check for plugin
+  setTimeout(async () => {
+    try {
+      // Try to check permissions to verify plugin is loaded
+      await AudioInput.checkMicrophonePermission();
+      log('AudioInput plugin loaded', 'success');
+    } catch (error) {
+      log('AudioInput plugin NOT found!', 'error');
+      log('Make sure to install the plugin and sync platforms', 'warning');
+      log('Error: ' + error.message, 'error');
+    }
+  }, 500);
 });

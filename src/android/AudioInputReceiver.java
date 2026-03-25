@@ -23,308 +23,297 @@ package com.exelerus.cordova.audioinputcapture;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
-import android.util.Base64;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import java.io.File;
-import java.io.FileOutputStream;
+import android.util.Base64;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
-import java.io.OutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-
 public class AudioInputReceiver extends Thread {
 
-	private final int RECORDING_BUFFER_FACTOR = 5;
-	private int channelConfig = AudioFormat.CHANNEL_IN_MONO;
-	private int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
-	private int sampleRateInHz = 44100;
-	private int audioSource = 0;
+    private final int RECORDING_BUFFER_FACTOR = 5;
+    private int channelConfig = AudioFormat.CHANNEL_IN_MONO;
+    private int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
+    private int sampleRateInHz = 44100;
+    private int audioSource = 0;
 
-	// Recording buffer
-	private int minBufferSize = AudioRecord.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat);
-	private int recordingBufferSize = minBufferSize * RECORDING_BUFFER_FACTOR;
+    // Recording buffer
+    private int minBufferSize = AudioRecord.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat);
+    private int recordingBufferSize = minBufferSize * RECORDING_BUFFER_FACTOR;
 
-	// Reading from the AudioRecord buffer
-	private int readBufferSize = minBufferSize;
+    // Reading from the AudioRecord buffer
+    private int readBufferSize = minBufferSize;
 
-	private AudioRecord recorder;
-	private Handler handler;
-	private Message message;
-	private Bundle messageBundle = new Bundle();
-	private URI fileUrl;
+    private AudioRecord recorder;
+    private Handler handler;
+    private Message message;
+    private Bundle messageBundle = new Bundle();
+    private URI fileUrl;
 
-	/**
-	 * Reusable buffers to reduce heap allocations and GC pressure.
-	 *
-	 * These buffers are allocated once in the constructor and reused throughout
-	 * the recording session:
-	 * - audioBuffer: Receives PCM data from AudioRecord for streaming mode
-	 * - byteBuffer: Converts short[] to byte[] for Base64 encoding (streaming)
-	 * - fileAudioBuffer: Receives PCM data for file recording mode
-	 *
-	 * Bundle is also reused via clear() instead of new Bundle() to reduce allocations.
-	 * This optimization reduces GC pauses during real-time audio capture.
-	 */
-	private ByteBuffer byteBuffer;
-	private short[] audioBuffer;
-	private byte[] fileAudioBuffer;
+    /**
+     * Reusable buffers to reduce heap allocations and GC pressure.
+     *
+     * These buffers are allocated once in the constructor and reused throughout
+     * the recording session:
+     * - audioBuffer: Receives PCM data from AudioRecord for streaming mode
+     * - byteBuffer: Converts short[] to byte[] for Base64 encoding (streaming)
+     * - fileAudioBuffer: Receives PCM data for file recording mode
+     *
+     * Bundle is also reused via clear() instead of new Bundle() to reduce allocations.
+     * This optimization reduces GC pauses during real-time audio capture.
+     */
+    private ByteBuffer byteBuffer;
+    private short[] audioBuffer;
+    private byte[] fileAudioBuffer;
 
-	public AudioInputReceiver() {
-		recorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRateInHz, channelConfig, audioFormat, minBufferSize * RECORDING_BUFFER_FACTOR);
-	}
+    public AudioInputReceiver() {
+        recorder =
+            new AudioRecord(
+                MediaRecorder.AudioSource.DEFAULT,
+                sampleRateInHz,
+                channelConfig,
+                audioFormat,
+                minBufferSize * RECORDING_BUFFER_FACTOR
+            );
+    }
 
-	public AudioInputReceiver(int sampleRate, int bufferSizeInBytes, int channels, String format, int audioSource, URI fileUrl) {
-		sampleRateInHz = sampleRate;
+    public AudioInputReceiver(int sampleRate, int bufferSizeInBytes, int channels, String format, int audioSource, URI fileUrl) {
+        sampleRateInHz = sampleRate;
 
-		switch (channels) {
-		    case 2:
-		        channelConfig = AudioFormat.CHANNEL_IN_STEREO;
-		        break;
-		    case 1:
-		    default:
-		        channelConfig = AudioFormat.CHANNEL_IN_MONO;
-		        break;
-		}
-		if("PCM_8BIT".equals(format)) {
-		    audioFormat = AudioFormat.ENCODING_PCM_8BIT;
-		}
-		else {
-		    audioFormat = AudioFormat.ENCODING_PCM_16BIT;
-		}
+        switch (channels) {
+            case 2:
+                channelConfig = AudioFormat.CHANNEL_IN_STEREO;
+                break;
+            case 1:
+            default:
+                channelConfig = AudioFormat.CHANNEL_IN_MONO;
+                break;
+        }
+        if ("PCM_8BIT".equals(format)) {
+            audioFormat = AudioFormat.ENCODING_PCM_8BIT;
+        } else {
+            audioFormat = AudioFormat.ENCODING_PCM_16BIT;
+        }
 
-		readBufferSize = bufferSizeInBytes;
+        readBufferSize = bufferSizeInBytes;
 
-		// Get the minimum recording buffer size for the specified configuration
-		minBufferSize = AudioRecord.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat);
+        // Get the minimum recording buffer size for the specified configuration
+        minBufferSize = AudioRecord.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat);
 
-		// We use a recording buffer size larger than the one used for reading to avoid buffer underrun.
-		recordingBufferSize = readBufferSize * RECORDING_BUFFER_FACTOR;
+        // We use a recording buffer size larger than the one used for reading to avoid buffer underrun.
+        recordingBufferSize = readBufferSize * RECORDING_BUFFER_FACTOR;
 
-		// Ensure that the given recordingBufferSize isn't lower than the minimum buffer size allowed for the current configuration
-		//
-		if (recordingBufferSize < minBufferSize) {
-		    recordingBufferSize = minBufferSize;
-		}
+        // Ensure that the given recordingBufferSize isn't lower than the minimum buffer size allowed for the current configuration
+        //
+        if (recordingBufferSize < minBufferSize) {
+            recordingBufferSize = minBufferSize;
+        }
 
-		recorder = new AudioRecord(audioSource, sampleRateInHz, channelConfig, audioFormat, recordingBufferSize);
-		this.fileUrl = fileUrl;
+        recorder = new AudioRecord(audioSource, sampleRateInHz, channelConfig, audioFormat, recordingBufferSize);
+        this.fileUrl = fileUrl;
 
-		// Pre-allocate reusable buffers to reduce GC pressure
-		this.audioBuffer = new short[readBufferSize];
-		this.byteBuffer = ByteBuffer.allocate(readBufferSize * 2);
-		this.byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-		this.fileAudioBuffer = new byte[readBufferSize];
-	}
+        // Pre-allocate reusable buffers to reduce GC pressure
+        this.audioBuffer = new short[readBufferSize];
+        this.byteBuffer = ByteBuffer.allocate(readBufferSize * 2);
+        this.byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        this.fileAudioBuffer = new byte[readBufferSize];
+    }
 
-	public void setHandler(Handler handler) {
-		this.handler = handler;
-	}
+    public void setHandler(Handler handler) {
+        this.handler = handler;
+    }
 
-	@Override
-	public void run() {
-		if (fileUrl == null) {
+    @Override
+    public void run() {
+        if (fileUrl == null) {
+            // Forward audio data to Cordova Web app
+            //
 
-			// Forward audio data to Cordova Web app
-			//
+            int numReadBytes = 0;
+            synchronized (this) {
+                recorder.startRecording();
 
-			int numReadBytes = 0;
-			synchronized(this) {
-			    recorder.startRecording();
+                try {
+                    while (!isInterrupted()) {
+                        numReadBytes = recorder.read(audioBuffer, 0, readBufferSize);
 
-				try
-				{
-					while (!isInterrupted()) {
-						numReadBytes = recorder.read(audioBuffer, 0, readBufferSize);
+                        if (numReadBytes > 0) {
+                            try {
+                                // Reuse ByteBuffer to reduce allocations
+                                byteBuffer.clear();
+                                for (int i = 0; i < numReadBytes; i++) {
+                                    byteBuffer.putShort(audioBuffer[i]);
+                                }
 
-						if (numReadBytes > 0) {
-							try {
-								// Reuse ByteBuffer to reduce allocations
-								byteBuffer.clear();
-								for (int i = 0; i < numReadBytes; i++) {
-									byteBuffer.putShort(audioBuffer[i]);
-								}
+                                // Encode to Base64 - only encode the used portion
+                                String encoded = Base64.encodeToString(byteBuffer.array(), 0, numReadBytes * 2, Base64.NO_WRAP);
 
-								// Encode to Base64 - only encode the used portion
-								String encoded = Base64.encodeToString(byteBuffer.array(), 0, numReadBytes * 2, Base64.NO_WRAP);
+                                // Reuse message and bundle to reduce allocations
+                                message = handler.obtainMessage();
+                                messageBundle.clear();
+                                messageBundle.putString("data", encoded);
+                                message.setData(messageBundle);
+                                handler.sendMessage(message);
+                            } catch (Exception ex) {
+                                message = handler.obtainMessage();
+                                messageBundle.clear();
+                                messageBundle.putString("error", ex.toString());
+                                message.setData(messageBundle);
+                                handler.sendMessage(message);
+                            }
+                        }
+                    }
 
-								// Reuse message and bundle to reduce allocations
-								message = handler.obtainMessage();
-								messageBundle.clear();
-								messageBundle.putString("data", encoded);
-								message.setData(messageBundle);
-								handler.sendMessage(message);
-							}
-							catch(Exception ex) {
-								message = handler.obtainMessage();
-								messageBundle.clear();
-								messageBundle.putString("error", ex.toString());
-								message.setData(messageBundle);
-								handler.sendMessage(message);
-							}
-						}
-					}
+                    if (recorder.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                        recorder.stop();
+                    }
+                } catch (Exception ex) {
+                    message = handler.obtainMessage();
+                    messageBundle.clear();
+                    messageBundle.putString("error", ex.toString());
+                    message.setData(messageBundle);
+                    handler.sendMessage(message);
+                }
 
-					if (recorder.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
-						recorder.stop();
-					}
-				}
-				catch(Exception ex)
-				{
-					message = handler.obtainMessage();
-					messageBundle.clear();
-					messageBundle.putString("error", ex.toString());
-					message.setData(messageBundle);
-					handler.sendMessage(message);
-				}
+                recorder.release();
+                recorder = null;
+            }
+        } else {
+            // Recording to fileUrl
+            //
+            int numReadBytes = 0;
 
-			    recorder.release();
-			    recorder = null;
-			}
-		}
-		else
-		{
-			// Recording to fileUrl
-			//
-			int numReadBytes = 0;
+            synchronized (this) {
+                URI finalUrl = fileUrl; // Even if the member changes, we use what we were originally given
+                recorder.startRecording();
 
-			synchronized(this) {
-				URI finalUrl = fileUrl; // Even if the member changes, we use what we were originally given
-				recorder.startRecording();
+                try {
+                    File audioFile = File.createTempFile("AudioInputReceiver-", ".pcm");
+                    FileOutputStream os = new FileOutputStream(audioFile.getPath());
 
-				try
-				{
-					File audioFile = File.createTempFile("AudioInputReceiver-", ".pcm");
-					FileOutputStream os = new FileOutputStream(audioFile.getPath());
+                    while (!isInterrupted()) {
+                        numReadBytes = recorder.read(fileAudioBuffer, 0, readBufferSize);
 
-					while (!isInterrupted()) {
-						numReadBytes = recorder.read(fileAudioBuffer, 0, readBufferSize);
+                        if (numReadBytes > 0) {
+                            try {
+                                os.write(fileAudioBuffer, 0, numReadBytes);
+                            } catch (Exception ex) {
+                                message = handler.obtainMessage();
+                                messageBundle.clear();
+                                messageBundle.putString("error", ex.toString());
+                                message.setData(messageBundle);
+                                handler.sendMessage(message);
+                            }
+                        }
+                    }
 
-						if (numReadBytes > 0) {
-							try {
-								os.write(fileAudioBuffer, 0, numReadBytes);
-							}
-							catch(Exception ex) {
-								message = handler.obtainMessage();
-								messageBundle.clear();
-								messageBundle.putString("error", ex.toString());
-								message.setData(messageBundle);
-								handler.sendMessage(message);
-							}
-						}
-					}
+                    os.close();
+                    File wav = new File(finalUrl);
+                    addWavHeader(audioFile, wav);
+                    audioFile.delete();
 
-					os.close();
-					File wav = new File(finalUrl);
-					addWavHeader(audioFile, wav);
-					audioFile.delete();
+                    message = handler.obtainMessage();
+                    messageBundle.clear();
+                    messageBundle.putString("file", wav.toURI().toString());
+                    message.setData(messageBundle);
+                    handler.sendMessage(message);
 
-					message = handler.obtainMessage();
-					messageBundle.clear();
-					messageBundle.putString("file", wav.toURI().toString());
-					message.setData(messageBundle);
-					handler.sendMessage(message);
+                    if (recorder.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                        recorder.stop();
+                    }
+                } catch (Throwable ex) {
+                    message = handler.obtainMessage();
+                    messageBundle.clear();
+                    messageBundle.putString("error", ex.toString());
+                    message.setData(messageBundle);
+                    handler.sendMessage(message);
+                }
 
-					if (recorder.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
-						recorder.stop();
-					}
-				}
-				catch(Throwable ex)
-				{
-					message = handler.obtainMessage();
-					messageBundle.clear();
-					messageBundle.putString("error", ex.toString());
-					message.setData(messageBundle);
-					handler.sendMessage(message);
-				}
+                recorder.release();
+                recorder = null;
+            }
+        }
+    }
 
-				recorder.release();
-				recorder = null;
-			}
-		}
-	}
+    private File addWavHeader(File fPCM, File wav) {
+        try {
+            long mySubChunk1Size = 16;
+            int myBitsPerSample = audioFormat == AudioFormat.ENCODING_PCM_8BIT ? 8 : 16;
+            int myFormat = 1;
+            long myChannels = channelConfig == AudioFormat.CHANNEL_IN_STEREO ? 2 : 1;
+            long mySampleRate = sampleRateInHz;
+            long myByteRate = mySampleRate * myChannels * myBitsPerSample / 8;
+            int myBlockAlign = (int) (myChannels * myBitsPerSample / 8);
 
-	private File addWavHeader(File fPCM, File wav) {
-		try {
-			long mySubChunk1Size = 16;
-			int myBitsPerSample= audioFormat==AudioFormat.ENCODING_PCM_8BIT?8:16;
-			int myFormat = 1;
-			long myChannels = channelConfig==AudioFormat.CHANNEL_IN_STEREO?2:1;
-			long mySampleRate = sampleRateInHz;
-			long myByteRate = mySampleRate * myChannels * myBitsPerSample/8;
-			int myBlockAlign = (int) (myChannels * myBitsPerSample/8);
+            long myDataSize = fPCM.length();
+            long myChunk2Size = myDataSize * myChannels * myBitsPerSample / 8;
+            long myChunkSize = 36 + myChunk2Size;
 
-			long myDataSize = fPCM.length();
-			long myChunk2Size =  myDataSize * myChannels * myBitsPerSample/8;
-			long myChunkSize = 36 + myChunk2Size;
+            OutputStream os = new FileOutputStream(wav);
+            BufferedOutputStream bos = new BufferedOutputStream(os);
+            DataOutputStream outFile = new DataOutputStream(bos);
 
-			OutputStream os = new FileOutputStream(wav);
-			BufferedOutputStream bos = new BufferedOutputStream(os);
-			DataOutputStream outFile = new DataOutputStream(bos);
-
-			outFile.writeBytes("RIFF");                                     // 00 - RIFF
-			outFile.write(intToByteArray((int)myChunkSize), 0, 4);          // 04 - how big is the rest of this file?
-			outFile.writeBytes("WAVE");                                     // 08 - WAVE
-			outFile.writeBytes("fmt ");                                     // 12 - fmt
-			outFile.write(intToByteArray((int)mySubChunk1Size), 0, 4);      // 16 - size of this chunk
-			outFile.write(shortToByteArray((short)myFormat), 0, 2);         // 20 - what is the audio format? 1 for PCM = Pulse Code Modulation
-			outFile.write(shortToByteArray((short)myChannels), 0, 2);       // 22 - mono or stereo? 1 or 2?  (or 5 or ???)
-			outFile.write(intToByteArray((int)mySampleRate), 0, 4);         // 24 - samples per second (numbers per second)
-			outFile.write(intToByteArray((int)myByteRate), 0, 4);           // 28 - bytes per second
-			outFile.write(shortToByteArray((short)myBlockAlign), 0, 2);     // 32 - # of bytes in one sample, for all channels
-			outFile.write(shortToByteArray((short)myBitsPerSample), 0, 2);  // 34 - how many bits in a sample(number)?  usually 16 or 24
-			outFile.writeBytes("data");                                     // 36 - data
-			outFile.write(intToByteArray((int)myDataSize), 0, 4);           // 40 - how big is this data chunk
+            outFile.writeBytes("RIFF"); // 00 - RIFF
+            outFile.write(intToByteArray((int) myChunkSize), 0, 4); // 04 - how big is the rest of this file?
+            outFile.writeBytes("WAVE"); // 08 - WAVE
+            outFile.writeBytes("fmt "); // 12 - fmt
+            outFile.write(intToByteArray((int) mySubChunk1Size), 0, 4); // 16 - size of this chunk
+            outFile.write(shortToByteArray((short) myFormat), 0, 2); // 20 - what is the audio format? 1 for PCM = Pulse Code Modulation
+            outFile.write(shortToByteArray((short) myChannels), 0, 2); // 22 - mono or stereo? 1 or 2?  (or 5 or ???)
+            outFile.write(intToByteArray((int) mySampleRate), 0, 4); // 24 - samples per second (numbers per second)
+            outFile.write(intToByteArray((int) myByteRate), 0, 4); // 28 - bytes per second
+            outFile.write(shortToByteArray((short) myBlockAlign), 0, 2); // 32 - # of bytes in one sample, for all channels
+            outFile.write(shortToByteArray((short) myBitsPerSample), 0, 2); // 34 - how many bits in a sample(number)?  usually 16 or 24
+            outFile.writeBytes("data"); // 36 - data
+            outFile.write(intToByteArray((int) myDataSize), 0, 4); // 40 - how big is this data chunk
             // 44 - the actual data itself - is written in loop below
 
-			FileInputStream pcmIn = new FileInputStream(fPCM);
-			byte buffer[] = new byte[1024];
-			int iBytesRead = pcmIn.read(buffer);
+            FileInputStream pcmIn = new FileInputStream(fPCM);
+            byte buffer[] = new byte[1024];
+            int iBytesRead = pcmIn.read(buffer);
 
-			while (iBytesRead > 0)
-			{
-				outFile.write(buffer, 0, iBytesRead);
-				iBytesRead = pcmIn.read(buffer);
-			}
+            while (iBytesRead > 0) {
+                outFile.write(buffer, 0, iBytesRead);
+                iBytesRead = pcmIn.read(buffer);
+            }
 
-			pcmIn.close();
+            pcmIn.close();
 
-			outFile.flush();
-			outFile.close();
+            outFile.flush();
+            outFile.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-		}
-		catch (IOException e) {
-			e.printStackTrace();
-		}
+        fPCM.delete();
+        return wav;
+    }
 
-		fPCM.delete();
-		return wav;
-	}
+    private static byte[] intToByteArray(int i) {
+        byte[] b = new byte[4];
+        b[0] = (byte) (i & 0x00FF);
+        b[1] = (byte) ((i >> 8) & 0x000000FF);
+        b[2] = (byte) ((i >> 16) & 0x000000FF);
+        b[3] = (byte) ((i >> 24) & 0x000000FF);
+        return b;
+    }
 
-	private static byte[] intToByteArray(int i)
-	{
-		byte[] b = new byte[4];
-		b[0] = (byte) (i & 0x00FF);
-		b[1] = (byte) ((i >> 8) & 0x000000FF);
-		b[2] = (byte) ((i >> 16) & 0x000000FF);
-		b[3] = (byte) ((i >> 24) & 0x000000FF);
-		return b;
-	}
+    // Convert a short to a byte array
+    public static byte[] shortToByteArray(short data) {
+        /*
+         * NB have also tried: return new byte[]{(byte)(data & 0xff),(byte)((data >> 8) & 0xff)};
+         *
+         */
 
-	// Convert a short to a byte array
-	public static byte[] shortToByteArray(short data)
-	{
-		/*
- 		 * NB have also tried: return new byte[]{(byte)(data & 0xff),(byte)((data >> 8) & 0xff)};
-		 *
-		 */
-
-		return new byte[]{(byte)(data & 0xff),(byte)((data >>> 8) & 0xff)};
-	}
+        return new byte[] { (byte) (data & 0xff), (byte) ((data >>> 8) & 0xff) };
+    }
 }
