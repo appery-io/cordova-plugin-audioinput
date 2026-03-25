@@ -42,6 +42,8 @@ class AudioInputPlugin : Plugin() {
     private var format: String = "PCM_16BIT"
     private var audioSource: Int = 0
     private var fileUrl: URI? = null
+    private var normalize: Boolean = true
+    private var normalizationFactor: Double = 32767.0
 
     @PluginMethod
     fun initialize(call: PluginCall) {
@@ -51,6 +53,8 @@ class AudioInputPlugin : Plugin() {
             channels = call.getInt("channels", 1)!!
             format = call.getString("format", "PCM_16BIT")!!
             audioSource = call.getInt("audioSourceType", 0)!!
+            normalize = call.getBoolean("normalize", true)!!
+            normalizationFactor = call.getDouble("normalizationFactor", 32767.0)!!
 
             val fileUrlString = call.getString("fileUrl")
             fileUrl = if (fileUrlString != null) URI(fileUrlString) else null
@@ -89,6 +93,8 @@ class AudioInputPlugin : Plugin() {
             channels = call.getInt("channels", channels)!!
             format = call.getString("format", format)!!
             audioSource = call.getInt("audioSourceType", audioSource)!!
+            normalize = call.getBoolean("normalize", normalize)!!
+            normalizationFactor = call.getDouble("normalizationFactor", normalizationFactor)!!
 
             val fileUrlString = call.getString("fileUrl")
             fileUrl = if (fileUrlString != null) URI(fileUrlString) else null
@@ -187,17 +193,18 @@ class AudioInputPlugin : Plugin() {
 
                 when {
                     data != null -> {
-                        // Audio data received as Base64 - decode and convert to float array
+                        // Audio data received as Base64 - decode and convert
                         val bytes = Base64.decode(data, Base64.NO_WRAP)
                         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
-                        // Convert to short array (PCM_16BIT)
                         val audioData = JSONArray()
                         while (buffer.remaining() >= 2) {
                             val sample = buffer.short
-                            // Normalize to -1.0 to 1.0 range
-                            val normalized = sample.toFloat() / 32767.0f
-                            audioData.put(normalized.toDouble())
+                            if (plugin.normalize) {
+                                audioData.put((sample.toDouble() / plugin.normalizationFactor))
+                            } else {
+                                audioData.put(sample.toInt())
+                            }
                         }
 
                         val ret = JSObject()

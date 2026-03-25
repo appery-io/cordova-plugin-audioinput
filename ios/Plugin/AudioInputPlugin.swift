@@ -17,6 +17,8 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
     private var channels: Int16 = 1
     private var format: String = "PCM_16BIT"
     private var audioSourceType: Int32 = 0
+    private var normalize: Bool = true
+    private var normalizationFactor: Double = 32767.0
 
     @objc func initialize(_ call: CAPPluginCall) {
         sampleRate = Int32(call.getInt("sampleRate") ?? 44100)
@@ -24,6 +26,8 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
         channels = Int16(call.getInt("channels") ?? 1)
         format = call.getString("format") ?? "PCM_16BIT"
         audioSourceType = Int32(call.getInt("audioSourceType") ?? 0)
+        normalize = call.getBool("normalize") ?? true
+        normalizationFactor = call.getDouble("normalizationFactor") ?? 32767.0
         fileUrl = call.getString("fileUrl")
 
         call.resolve()
@@ -64,6 +68,12 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
         }
         if let ast = call.getInt("audioSourceType") {
             audioSourceType = Int32(ast)
+        }
+        if let norm = call.getBool("normalize") {
+            normalize = norm
+        }
+        if let normFactor = call.getDouble("normalizationFactor") {
+            normalizationFactor = normFactor
         }
         fileUrl = call.getString("fileUrl")
 
@@ -108,16 +118,19 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
-            // Convert C array to Swift array
-            var samples: [Int16] = []
-            for i in 0..<Int(length) {
-                samples.append(data[i])
+            if self.normalize {
+                var samples: [Double] = []
+                for i in 0..<Int(length) {
+                    samples.append(Double(data[i]) / self.normalizationFactor)
+                }
+                self.notifyListeners("audioData", data: ["data": samples])
+            } else {
+                var samples: [Int16] = []
+                for i in 0..<Int(length) {
+                    samples.append(data[i])
+                }
+                self.notifyListeners("audioData", data: ["data": samples])
             }
-
-            // Notify listeners
-            self.notifyListeners("audioData", data: [
-                "data": samples
-            ])
         }
     }
 

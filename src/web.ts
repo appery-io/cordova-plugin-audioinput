@@ -46,12 +46,14 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
     }
   }
 
-  async start(options: AudioInputOptions): Promise<void> {
+  async start(options?: AudioInputOptions): Promise<void> {
     if (this.capturing) {
       throw new Error('Already capturing audio');
     }
 
-    this.options = { ...this.options, ...options };
+    if (options) {
+      this.options = { ...this.options, ...options };
+    }
 
     try {
       // Request microphone access

@@ -32,7 +32,7 @@ export interface AudioInputPlugin {
    * @param options Configuration options for audio capture
    * @returns Promise that resolves when recording starts
    */
-  start(options: AudioInputOptions): Promise<void>;
+  start(options?: AudioInputOptions): Promise<void>;
 
   /**
    * Stop audio capture
