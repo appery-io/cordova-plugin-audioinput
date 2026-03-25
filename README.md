@@ -74,11 +74,8 @@ AudioInput.addListener('audioData', (event) => {
   // Process audio data...
 });
 
-// Start capturing
-await AudioInput.start({
-  sampleRate: 44100,
-  bufferSize: 16384
-});
+// Start capturing (uses options from initialize)
+await AudioInput.start();
 
 // Stop capturing
 await AudioInput.stop();
@@ -195,14 +192,17 @@ async function setupRawAudio() {
     console.error('Audio error:', event.message);
   });
 
-  // Start capturing
-  await AudioInput.start({
+  // Initialize with options
+  await AudioInput.initialize({
     sampleRate: 44100,
     bufferSize: 8192,
     channels: 1,
     format: 'PCM_16BIT',
     normalize: true
   });
+
+  // Start capturing (uses options from initialize)
+  await AudioInput.start();
 }
 
 function processAudioData(samples: number[]) {
@@ -264,15 +264,18 @@ async function recordToFile() {
     // File is now available at event.fileUrl
   });
 
-  // Start recording to file
+  // Initialize with options
   const fileUrl = 'file:///path/to/recording.wav';
-  await AudioInput.start({
+  await AudioInput.initialize({
     sampleRate: 16000,
     bufferSize: 8192,
     channels: 1,
     format: 'PCM_16BIT',
     fileUrl: fileUrl
   });
+
+  // Start recording to file
+  await AudioInput.start();
 
   // When ready to stop
   const result = await AudioInput.stop();
@@ -415,7 +418,7 @@ await AudioInput.checkMicrophonePermission(): Promise<{ granted: boolean }>
 await AudioInput.getMicrophonePermission(): Promise<{ granted: boolean }>
 
 // Start audio capture
-await AudioInput.start(options: AudioInputOptions): Promise<void>
+await AudioInput.start(options?: AudioInputOptions): Promise<void>
 
 // Stop audio capture
 await AudioInput.stop(): Promise<{ fileUrl?: string }>
@@ -535,7 +538,8 @@ AudioInput.addListener('audioData', (event) => {
   }
 });
 
-await AudioInput.start({ normalize: true });
+await AudioInput.initialize({ normalize: true });
+await AudioInput.start();
 ```
 
 ## 💾 Demo Apps
