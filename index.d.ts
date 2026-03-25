@@ -1,4 +1,4 @@
-declare module 'cordova-plugin-audioinput' { }
+declare module 'cordova-plugin-audioinput' {}
 
 export interface AudioInputConfiguration {
   // The Sample Rate in Hz.
@@ -32,7 +32,6 @@ export interface AudioInputConfiguration {
   // one (prefixed) will be created by the plugin.
   audioContext?: AudioContext;
 
-
   // Defines how many chunks will be merged each time, a low value means lower latency
   // but requires more CPU resources.
   concatenateMaxChunks?: number;
@@ -59,23 +58,22 @@ export interface AudioInputConfiguration {
   fileUrl?: string;
 
   // Optional onError callback. Is called with error message string as parameter.
-  onError?: Function;
+  onError?: (message: string) => void;
 
   // Guess it?
   debug?: boolean;
 }
 
 declare interface AudioInput {
-
-  FORMAT:  {
+  FORMAT: {
     PCM_16BIT: string;
     PCM_8BIT: string;
-  }
+  };
 
   CHANNELS: {
     MONO: number;
     STEREO: number;
-  }
+  };
 
   SAMPLERATE: {
     TELEPHONE_8000Hz: number;
@@ -86,7 +84,7 @@ declare interface AudioInput {
     CD_XA_37800Hz: number;
     NTSC_44056Hz: number;
     CD_AUDIO_44100Hz: number;
-  }
+  };
 
   AUDIOSOURCE_TYPE: {
     DEFAULT: number;
@@ -95,7 +93,7 @@ declare interface AudioInput {
     UNPROCESSED: number;
     VOICE_COMMUNICATION: number;
     VOICE_RECOGNITION: number;
-  }
+  };
 
   initialize(cfg: AudioInputConfiguration, onComplete: any): void;
   checkMicrophonePermission(onComplete: any): void;

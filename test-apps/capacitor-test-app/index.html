@@ -1,234 +1,249 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AudioInput Capacitor Test</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          sans-serif;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
 
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      }
 
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 24px;
-        }
+      h1 {
+        color: #333;
+        margin-bottom: 10px;
+        font-size: 24px;
+      }
 
-        .subtitle {
-            color: #666;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
+      .subtitle {
+        color: #666;
+        margin-bottom: 20px;
+        font-size: 14px;
+      }
 
-        .button-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+      .button-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
 
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
 
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
 
-        button:active {
-            transform: translateY(0);
-        }
+      button:active {
+        transform: translateY(0);
+      }
 
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
 
-        button.stop {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        }
+      button.stop {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      }
 
-        button.full-width {
-            grid-column: 1 / -1;
-        }
+      button.full-width {
+        grid-column: 1 / -1;
+      }
 
-        #status {
-            margin-top: 20px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            min-height: 200px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            border: 1px solid #e9ecef;
-        }
+      #status {
+        margin-top: 20px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        min-height: 200px;
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        border: 1px solid #e9ecef;
+      }
 
-        .info {
-            background: #e7f3ff;
-            border-left: 4px solid #2196F3;
-            padding: 12px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            font-size: 13px;
-            line-height: 1.5;
-        }
+      .info {
+        background: #e7f3ff;
+        border-left: 4px solid #2196f3;
+        padding: 12px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
 
-        .log-entry {
-            margin-bottom: 4px;
-        }
+      .log-entry {
+        margin-bottom: 4px;
+      }
 
-        .log-success { color: #28a745; }
-        .log-error { color: #dc3545; }
-        .log-info { color: #17a2b8; }
-        .log-warning { color: #ffc107; }
+      .log-success {
+        color: #28a745;
+      }
+      .log-error {
+        color: #dc3545;
+      }
+      .log-info {
+        color: #17a2b8;
+      }
+      .log-warning {
+        color: #ffc107;
+      }
 
-        .level-meter-container {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
+      .level-meter-container {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+      }
 
-        .level-meter-label {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
+      .level-meter-label {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
 
-        .level-meter {
-            width: 100%;
-            height: 30px;
-            background: #e9ecef;
-            border-radius: 6px;
-            overflow: hidden;
-            position: relative;
-        }
+      .level-meter {
+        width: 100%;
+        height: 30px;
+        background: #e9ecef;
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+      }
 
-        .level-meter-fill {
-            height: 100%;
-            background: linear-gradient(to right, #28a745, #ffc107, #dc3545);
-            transition: width 0.1s;
-            width: 0%;
-        }
+      .level-meter-fill {
+        height: 100%;
+        background: linear-gradient(to right, #28a745, #ffc107, #dc3545);
+        transition: width 0.1s;
+        width: 0%;
+      }
 
-        .level-meter-value {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 12px;
-            font-weight: bold;
-            color: #333;
-            text-shadow: 0 0 3px white;
-        }
+      .level-meter-value {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        font-weight: bold;
+        color: #333;
+        text-shadow: 0 0 3px white;
+      }
 
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin: 15px 0;
-        }
+      .stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 15px 0;
+      }
 
-        .stat-box {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
+      .stat-box {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+      }
 
-        .stat-label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
+      .stat-label {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 5px;
+      }
 
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #667eea;
-        }
+      .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #667eea;
+      }
 
-        button.play-btn {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        }
+      button.play-btn {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>AudioInput Plugin Test</h1>
-        <div class="subtitle">Capacitor Test App</div>
+      <h1>AudioInput Plugin Test</h1>
+      <div class="subtitle">Capacitor Test App</div>
 
-        <div class="info">
-            <strong>Testing cordova-plugin-audioinput with Capacitor</strong><br>
-            This app tests audio capture with playback and level monitoring.
+      <div class="info">
+        <strong>Testing cordova-plugin-audioinput with Capacitor</strong><br />
+        This app tests audio capture with playback and level monitoring.
+      </div>
+
+      <div class="button-group">
+        <button id="startBtn" onclick="startCapture()">▶ Start Capture</button>
+        <button id="stopBtn" class="stop" onclick="stopCapture()" disabled>
+          ⬛ Stop Capture
+        </button>
+        <button id="playBtn" class="play-btn" onclick="playback()" disabled>
+          🔊 Play Recording
+        </button>
+        <button onclick="getPermission()">🎤 Request Permission</button>
+        <button onclick="checkMicrophonePermission()">
+          ✓ Check Permission
+        </button>
+        <button onclick="clearLog()" class="full-width">🗑 Clear Log</button>
+      </div>
+
+      <div class="level-meter-container">
+        <div class="level-meter-label">Audio Level</div>
+        <div class="level-meter">
+          <div class="level-meter-fill" id="levelFill"></div>
+          <div class="level-meter-value" id="levelValue">0%</div>
         </div>
+      </div>
 
-        <div class="button-group">
-            <button id="startBtn" onclick="startCapture()">▶ Start Capture</button>
-            <button id="stopBtn" class="stop" onclick="stopCapture()" disabled>⬛ Stop Capture</button>
-            <button id="playBtn" class="play-btn" onclick="playback()" disabled>🔊 Play Recording</button>
-            <button onclick="getPermission()">🎤 Request Permission</button>
-            <button onclick="checkMicrophonePermission()">✓ Check Permission</button>
-            <button onclick="clearLog()" class="full-width">🗑 Clear Log</button>
+      <div class="stats">
+        <div class="stat-box">
+          <div class="stat-label">Chunks Received</div>
+          <div class="stat-value" id="chunkCount">0</div>
         </div>
-
-        <div class="level-meter-container">
-            <div class="level-meter-label">Audio Level</div>
-            <div class="level-meter">
-                <div class="level-meter-fill" id="levelFill"></div>
-                <div class="level-meter-value" id="levelValue">0%</div>
-            </div>
+        <div class="stat-box">
+          <div class="stat-label">Recording Duration</div>
+          <div class="stat-value" id="duration">0.0s</div>
         </div>
+      </div>
 
-        <div class="stats">
-            <div class="stat-box">
-                <div class="stat-label">Chunks Received</div>
-                <div class="stat-value" id="chunkCount">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Recording Duration</div>
-                <div class="stat-value" id="duration">0.0s</div>
-            </div>
-        </div>
-
-        <div id="status">Initializing...</div>
+      <div id="status">Initializing...</div>
     </div>
 
     <script type="module" src="/main.js"></script>
-</body>
+  </body>
 </html>

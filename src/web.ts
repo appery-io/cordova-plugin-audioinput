@@ -5,7 +5,6 @@ import type {
   AudioInputOptions,
   AudioDataEvent,
   AudioErrorEvent,
-  AudioFinishedEvent,
 } from './definitions';
 
 /**
@@ -66,18 +65,25 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
       });
 
       // Create audio context
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContext =
+        window.AudioContext || (window as any).webkitAudioContext;
       this.audioContext = new AudioContext();
 
       // Create nodes
-      const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+      const source = this.audioContext.createMediaStreamSource(
+        this.mediaStream,
+      );
       this.micGainNode = this.audioContext.createGain();
 
       // Create script processor for audio data
       const bufferSize = this.options.bufferSize || 16384;
-      this.scriptProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+      this.scriptProcessor = this.audioContext.createScriptProcessor(
+        bufferSize,
+        1,
+        1,
+      );
 
-      this.scriptProcessor.onaudioprocess = (event) => {
+      this.scriptProcessor.onaudioprocess = event => {
         if (!this.capturing) return;
 
         const inputData = event.inputBuffer.getChannelData(0);

@@ -25,50 +25,50 @@ var hasTypedArrays = 'Int16Array' in window && 'Float32Array' in window;
 
 // Audio formats
 audioinput.FORMAT = {
-    PCM_16BIT: 'PCM_16BIT',
-    PCM_8BIT: 'PCM_8BIT'
+  PCM_16BIT: 'PCM_16BIT',
+  PCM_8BIT: 'PCM_8BIT',
 };
 
 // Number of audio channels
 audioinput.CHANNELS = {
-    MONO: 1,
-    STEREO: 2
+  MONO: 1,
+  STEREO: 2,
 };
 
 // Sampling rates
 audioinput.SAMPLERATE = {
-    TELEPHONE_8000Hz: 8000,
-    CD_QUARTER_11025Hz: 11025,
-    VOIP_16000Hz: 16000,
-    CD_HALF_22050Hz: 22050,
-    MINI_DV_32000Hz: 32000,
-    CD_XA_37800Hz: 37800,
-    NTSC_44056Hz: 44056,
-    CD_AUDIO_44100Hz: 44100
+  TELEPHONE_8000Hz: 8000,
+  CD_QUARTER_11025Hz: 11025,
+  VOIP_16000Hz: 16000,
+  CD_HALF_22050Hz: 22050,
+  MINI_DV_32000Hz: 32000,
+  CD_XA_37800Hz: 37800,
+  NTSC_44056Hz: 44056,
+  CD_AUDIO_44100Hz: 44100,
 };
 
 // Audio Source types
 audioinput.AUDIOSOURCE_TYPE = {
-    DEFAULT: 0,
-    CAMCORDER: 5,
-    MIC: 1,
-    UNPROCESSED: 9,
-    VOICE_COMMUNICATION: 7,
-    VOICE_RECOGNITION: 6
+  DEFAULT: 0,
+  CAMCORDER: 5,
+  MIC: 1,
+  UNPROCESSED: 9,
+  VOICE_COMMUNICATION: 7,
+  VOICE_RECOGNITION: 6,
 };
 
 // Default values
 audioinput.DEFAULT = {
-    SAMPLERATE: audioinput.SAMPLERATE.CD_AUDIO_44100Hz,
-    BUFFER_SIZE: 16384,
-    CHANNELS: audioinput.CHANNELS.MONO,
-    FORMAT: audioinput.FORMAT.PCM_16BIT,
-    NORMALIZE: true,
-    NORMALIZATION_FACTOR: 32767.0,
-    STREAM_TO_WEBAUDIO: false,
-    CONCATENATE_MAX_CHUNKS: 10,
-    AUDIOSOURCE_TYPE: audioinput.AUDIOSOURCE_TYPE.DEFAULT,
-    DEBUG: false
+  SAMPLERATE: audioinput.SAMPLERATE.CD_AUDIO_44100Hz,
+  BUFFER_SIZE: 16384,
+  CHANNELS: audioinput.CHANNELS.MONO,
+  FORMAT: audioinput.FORMAT.PCM_16BIT,
+  NORMALIZE: true,
+  NORMALIZATION_FACTOR: 32767.0,
+  STREAM_TO_WEBAUDIO: false,
+  CONCATENATE_MAX_CHUNKS: 10,
+  AUDIOSOURCE_TYPE: audioinput.AUDIOSOURCE_TYPE.DEFAULT,
+  DEBUG: false,
 };
 
 /**
@@ -78,16 +78,22 @@ audioinput.DEFAULT = {
  * @param onComplete
  */
 audioinput.initialize = function (cfg, onComplete) {
-    audioinput._handleInputParameters(cfg);
-    exec(onComplete, audioinput._audioInputErrorEvent, "AudioInputCapture", "initialize",
-        [audioinput._cfg.sampleRate,
-            audioinput._cfg.bufferSize,
-            audioinput._cfg.channels,
-            audioinput._cfg.format,
-            audioinput._cfg.audioSourceType,
-            audioinput._cfg.fileUrl]);
+  audioinput._handleInputParameters(cfg);
+  exec(
+    onComplete,
+    audioinput._audioInputErrorEvent,
+    'AudioInputCapture',
+    'initialize',
+    [
+      audioinput._cfg.sampleRate,
+      audioinput._cfg.bufferSize,
+      audioinput._cfg.channels,
+      audioinput._cfg.format,
+      audioinput._cfg.audioSourceType,
+      audioinput._cfg.fileUrl,
+    ],
+  );
 };
-
 
 /**
  * Checks (silently) whether the user has already given permission to access the microphone.
@@ -95,9 +101,14 @@ audioinput.initialize = function (cfg, onComplete) {
  * @param onComplete
  */
 audioinput.checkMicrophonePermission = function (onComplete) {
-    exec(onComplete, audioinput._audioInputErrorEvent, "AudioInputCapture", "checkMicrophonePermission", []);
+  exec(
+    onComplete,
+    audioinput._audioInputErrorEvent,
+    'AudioInputCapture',
+    'checkMicrophonePermission',
+    [],
+  );
 };
-
 
 /**
  * Asks the user for permission to access the microphone.
@@ -105,7 +116,13 @@ audioinput.checkMicrophonePermission = function (onComplete) {
  * @param onComplete
  */
 audioinput.getMicrophonePermission = function (onComplete) {
-    exec(onComplete, audioinput._audioInputErrorEvent, "AudioInputCapture", "getMicrophonePermission", []);
+  exec(
+    onComplete,
+    audioinput._audioInputErrorEvent,
+    'AudioInputCapture',
+    'getMicrophonePermission',
+    [],
+  );
 };
 
 /**
@@ -125,52 +142,66 @@ audioinput.getMicrophonePermission = function (onComplete) {
  *  audioSourceType (Use audioinput.AUDIOSOURCE_TYPE)
  */
 audioinput.start = function (cfg) {
-    if (audioinput._capturing) throw "Already capturing!";
+  if (audioinput._capturing) throw 'Already capturing!';
 
-    audioinput._handleInputParameters(cfg);
+  audioinput._handleInputParameters(cfg);
 
-    exec(audioinput._audioInputEvent, audioinput._audioInputErrorEvent, "AudioInputCapture", "start",
-        [audioinput._cfg.sampleRate,
-            audioinput._cfg.bufferSize,
-            audioinput._cfg.channels,
-            audioinput._cfg.format,
-            audioinput._cfg.audioSourceType,
-            audioinput._cfg.fileUrl]);
+  exec(
+    audioinput._audioInputEvent,
+    audioinput._audioInputErrorEvent,
+    'AudioInputCapture',
+    'start',
+    [
+      audioinput._cfg.sampleRate,
+      audioinput._cfg.bufferSize,
+      audioinput._cfg.channels,
+      audioinput._cfg.format,
+      audioinput._cfg.audioSourceType,
+      audioinput._cfg.fileUrl,
+    ],
+  );
 
-    audioinput._capturing = true;
+  audioinput._capturing = true;
 
-    if (!audioinput._cfg.streamToWebAudio) return;
+  if (!audioinput._cfg.streamToWebAudio) return;
 
-    if (audioinput._initWebAudio(audioinput._cfg.audioContext)) {
-        audioinput._audioDataQueue = [];
-        audioinput._getNextToPlay();
-        return;
-    }
+  if (audioinput._initWebAudio(audioinput._cfg.audioContext)) {
+    audioinput._audioDataQueue = [];
+    audioinput._getNextToPlay();
+    return;
+  }
 
-    throw "The Web Audio API is not supported on this platform!";
+  throw 'The Web Audio API is not supported on this platform!';
 };
 
 /**
  * Stop capturing audio
  */
 audioinput.stop = function (onStopped) {
-    if (audioinput._capturing) {
-        exec(onStopped, audioinput._audioInputErrorEvent, "AudioInputCapture", "stop", []);
-        audioinput._capturing = false;
-    }
+  if (audioinput._capturing) {
+    exec(
+      onStopped,
+      audioinput._audioInputErrorEvent,
+      'AudioInputCapture',
+      'stop',
+      [],
+    );
+    audioinput._capturing = false;
+  }
 
-    if (audioinput._timerGetNextAudio) clearTimeout(audioinput._timerGetNextAudio);
-    audioinput._audioDataQueue = null;
+  if (audioinput._timerGetNextAudio)
+    clearTimeout(audioinput._timerGetNextAudio);
+  audioinput._audioDataQueue = null;
 
-    // Clear buffer pools to free memory
-    audioinput._clearBufferPools();
+  // Clear buffer pools to free memory
+  audioinput._clearBufferPools();
 
-    if (!audioinput._cfg.streamToWebAudio) return;
+  if (!audioinput._cfg.streamToWebAudio) return;
 
-    if (!audioinput._micGainNode) return;
-    audioinput.disconnect();
-    audioinput._micGainNode.disconnect();
-    audioinput._micGainNode = null;
+  if (!audioinput._micGainNode) return;
+  audioinput.disconnect();
+  audioinput._micGainNode.disconnect();
+  audioinput._micGainNode = null;
 };
 
 /**
@@ -179,19 +210,19 @@ audioinput.stop = function (onStopped) {
  * @param audioNode
  */
 audioinput.connect = function (audioNode) {
-    if (!audioinput._micGainNode) return;
+  if (!audioinput._micGainNode) return;
 
-    audioinput.disconnect();
-    audioinput._micGainNode.connect(audioNode);
+  audioinput.disconnect();
+  audioinput._micGainNode.connect(audioNode);
 };
 
 /**
  * Disconnect the audio node
  */
 audioinput.disconnect = function () {
-    if (!audioinput._micGainNode) return;
+  if (!audioinput._micGainNode) return;
 
-    audioinput._micGainNode.disconnect();
+  audioinput._micGainNode.disconnect();
 };
 
 /**
@@ -200,7 +231,7 @@ audioinput.disconnect = function () {
  * @returns {*}
  */
 audioinput.getAudioContext = function () {
-    return audioinput._audioContext;
+  return audioinput._audioContext;
 };
 
 /**
@@ -208,7 +239,7 @@ audioinput.getAudioContext = function () {
  * @returns {*}
  */
 audioinput.getCfg = function () {
-    return audioinput._cfg;
+  return audioinput._cfg;
 };
 
 /**
@@ -216,9 +247,8 @@ audioinput.getCfg = function () {
  * @returns {boolean|Array}
  */
 audioinput.isCapturing = function () {
-    return audioinput._capturing;
+  return audioinput._capturing;
 };
-
 
 /******************************************************************************************************************/
 /*                                                PRIVATE/INTERNAL                                                */
@@ -245,9 +275,9 @@ audioinput._onErrorCallback = undefined;
  * especially important for the concatenation step in streamToWebAudio mode.
  */
 audioinput._bufferPool = {
-    float32: [],
-    int16: [],
-    maxPoolSize: 10
+  float32: [],
+  int16: [],
+  maxPoolSize: 10,
 };
 
 /**
@@ -258,25 +288,25 @@ audioinput._bufferPool = {
  * @private
  */
 audioinput._getPooledBuffer = function (type, size) {
-    var pool = audioinput._bufferPool[type];
+  var pool = audioinput._bufferPool[type];
 
-    // Try to find a buffer of the right size
-    for (var i = 0; i < pool.length; i++) {
-        if (pool[i].length === size) {
-            return pool.splice(i, 1)[0];
-        }
+  // Try to find a buffer of the right size
+  for (var i = 0; i < pool.length; i++) {
+    if (pool[i].length === size) {
+      return pool.splice(i, 1)[0];
     }
+  }
 
-    // Try to find a larger buffer we can slice
-    for (var i = 0; i < pool.length; i++) {
-        if (pool[i].length >= size) {
-            var buffer = pool.splice(i, 1)[0];
-            return buffer.subarray(0, size);
-        }
+  // Try to find a larger buffer we can slice
+  for (var i = 0; i < pool.length; i++) {
+    if (pool[i].length >= size) {
+      var buffer = pool.splice(i, 1)[0];
+      return buffer.subarray(0, size);
     }
+  }
 
-    // No suitable buffer found, create new one
-    return type === 'float32' ? new Float32Array(size) : new Int16Array(size);
+  // No suitable buffer found, create new one
+  return type === 'float32' ? new Float32Array(size) : new Int16Array(size);
 };
 
 /**
@@ -286,11 +316,11 @@ audioinput._getPooledBuffer = function (type, size) {
  * @private
  */
 audioinput._releaseBuffer = function (type, buffer) {
-    var pool = audioinput._bufferPool[type];
+  var pool = audioinput._bufferPool[type];
 
-    if (pool.length < audioinput._bufferPool.maxPoolSize) {
-        pool.push(buffer);
-    }
+  if (pool.length < audioinput._bufferPool.maxPoolSize) {
+    pool.push(buffer);
+  }
 };
 
 /**
@@ -298,8 +328,8 @@ audioinput._releaseBuffer = function (type, buffer) {
  * @private
  */
 audioinput._clearBufferPools = function () {
-    audioinput._bufferPool.float32 = [];
-    audioinput._bufferPool.int16 = [];
+  audioinput._bufferPool.float32 = [];
+  audioinput._bufferPool.int16 = [];
 };
 
 /**
@@ -307,43 +337,87 @@ audioinput._clearBufferPools = function () {
  * @param cfg
  */
 audioinput._handleInputParameters = function (cfg) {
-    if (!cfg) cfg = {};
-    if (!audioinput._cfg) audioinput._cfg = {};
+  if (!cfg) cfg = {};
+  if (!audioinput._cfg) audioinput._cfg = {};
 
-    audioinput._cfg.sampleRate = parseInt(cfg.sampleRate) || audioinput.DEFAULT.SAMPLERATE;
-    audioinput._cfg.bufferSize = parseInt(cfg.bufferSize) || audioinput.DEFAULT.BUFFER_SIZE;
-    audioinput._cfg.channels = parseInt(cfg.channels) || audioinput.DEFAULT.CHANNELS;
-    audioinput._cfg.format = cfg.format || audioinput.DEFAULT.FORMAT;
-    audioinput._cfg.normalize = typeof cfg.normalize === 'boolean' ? cfg.normalize : audioinput.DEFAULT.NORMALIZE;
-    audioinput._cfg.normalizationFactor = cfg.normalizationFactor || audioinput.DEFAULT.NORMALIZATION_FACTOR;
-    audioinput._cfg.streamToWebAudio = typeof cfg.streamToWebAudio === 'boolean' ? cfg.streamToWebAudio : audioinput.DEFAULT.STREAM_TO_WEBAUDIO;
-    audioinput._cfg.audioContext = cfg.audioContext || null;
-    audioinput._cfg.concatenateMaxChunks = cfg.concatenateMaxChunks || audioinput.DEFAULT.CONCATENATE_MAX_CHUNKS;
-    audioinput._cfg.audioSourceType = cfg.audioSourceType || 0;
-    audioinput._cfg.fileUrl = cfg.fileUrl || null;
-    audioinput._cfg.debug = typeof cfg.debug === 'boolean' ? cfg.debug : audioinput.DEFAULT.DEBUG;
-    audioinput._onErrorCallback = typeof cfg.onError === 'function' ? cfg.onError : undefined;
+  audioinput._cfg.sampleRate =
+    parseInt(cfg.sampleRate) || audioinput.DEFAULT.SAMPLERATE;
+  audioinput._cfg.bufferSize =
+    parseInt(cfg.bufferSize) || audioinput.DEFAULT.BUFFER_SIZE;
+  audioinput._cfg.channels =
+    parseInt(cfg.channels) || audioinput.DEFAULT.CHANNELS;
+  audioinput._cfg.format = cfg.format || audioinput.DEFAULT.FORMAT;
+  audioinput._cfg.normalize =
+    typeof cfg.normalize === 'boolean'
+      ? cfg.normalize
+      : audioinput.DEFAULT.NORMALIZE;
+  audioinput._cfg.normalizationFactor =
+    cfg.normalizationFactor || audioinput.DEFAULT.NORMALIZATION_FACTOR;
+  audioinput._cfg.streamToWebAudio =
+    typeof cfg.streamToWebAudio === 'boolean'
+      ? cfg.streamToWebAudio
+      : audioinput.DEFAULT.STREAM_TO_WEBAUDIO;
+  audioinput._cfg.audioContext = cfg.audioContext || null;
+  audioinput._cfg.concatenateMaxChunks =
+    cfg.concatenateMaxChunks || audioinput.DEFAULT.CONCATENATE_MAX_CHUNKS;
+  audioinput._cfg.audioSourceType = cfg.audioSourceType || 0;
+  audioinput._cfg.fileUrl = cfg.fileUrl || null;
+  audioinput._cfg.debug =
+    typeof cfg.debug === 'boolean' ? cfg.debug : audioinput.DEFAULT.DEBUG;
+  audioinput._onErrorCallback =
+    typeof cfg.onError === 'function' ? cfg.onError : undefined;
 
-    if (isNaN(audioinput._cfg.channels) || (audioinput._cfg.channels < 1 || audioinput._cfg.channels > 2)) {
-        throw "Invalid number of channels (" + audioinput._cfg.channels + "). Only mono (1) and stereo (2) is" +
-        " supported.";
-    }
+  if (
+    isNaN(audioinput._cfg.channels) ||
+    audioinput._cfg.channels < 1 ||
+    audioinput._cfg.channels > 2
+  ) {
+    throw (
+      'Invalid number of channels (' +
+      audioinput._cfg.channels +
+      '). Only mono (1) and stereo (2) is' +
+      ' supported.'
+    );
+  }
 
-    if (audioinput._cfg.format !== "PCM_16BIT" && audioinput._cfg.format !== "PCM_8BIT") {
-        throw "Invalid format (" + audioinput._cfg.format + "). Only 'PCM_8BIT' and 'PCM_16BIT' is" + " supported.";
-    }
+  if (
+    audioinput._cfg.format !== 'PCM_16BIT' &&
+    audioinput._cfg.format !== 'PCM_8BIT'
+  ) {
+    throw (
+      'Invalid format (' +
+      audioinput._cfg.format +
+      "). Only 'PCM_8BIT' and 'PCM_16BIT' is" +
+      ' supported.'
+    );
+  }
 
-    if (isNaN(audioinput._cfg.bufferSize) || audioinput._cfg.bufferSize <= 0) {
-        throw "Invalid bufferSize (" + audioinput._cfg.bufferSize + "). Must be greater than zero.";
-    }
+  if (isNaN(audioinput._cfg.bufferSize) || audioinput._cfg.bufferSize <= 0) {
+    throw (
+      'Invalid bufferSize (' +
+      audioinput._cfg.bufferSize +
+      '). Must be greater than zero.'
+    );
+  }
 
-    if (isNaN(audioinput._cfg.concatenateMaxChunks) || audioinput._cfg.concatenateMaxChunks <= 0) {
-        throw "Invalid concatenateMaxChunks (" + audioinput._cfg.concatenateMaxChunks + "). Must be greater than zero.";
-    }
+  if (
+    isNaN(audioinput._cfg.concatenateMaxChunks) ||
+    audioinput._cfg.concatenateMaxChunks <= 0
+  ) {
+    throw (
+      'Invalid concatenateMaxChunks (' +
+      audioinput._cfg.concatenateMaxChunks +
+      '). Must be greater than zero.'
+    );
+  }
 
-    if (isNaN(audioinput._cfg.sampleRate)) {
-        throw "Invalid sampleRate (" + audioinput._cfg.sampleRate + "). Use one defined in audioInput.SAMPLERATE.";
-    }
+  if (isNaN(audioinput._cfg.sampleRate)) {
+    throw (
+      'Invalid sampleRate (' +
+      audioinput._cfg.sampleRate +
+      '). Use one defined in audioInput.SAMPLERATE.'
+    );
+  }
 };
 
 /**
@@ -353,13 +427,13 @@ audioinput._handleInputParameters = function (cfg) {
  * @private
  */
 audioinput._decodeBase64ToInt16 = function (base64) {
-    var binaryString = window.atob(base64);
-    var len = binaryString.length;
-    var bytes = new Uint8Array(len);
-    for (var i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    return new Int16Array(bytes.buffer);
+  var binaryString = window.atob(base64);
+  var len = binaryString.length;
+  var bytes = new Uint8Array(len);
+  for (var i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new Int16Array(bytes.buffer);
 };
 
 /**
@@ -368,42 +442,44 @@ audioinput._decodeBase64ToInt16 = function (base64) {
  * @param {Object} audioInputData     keys: data (PCM)
  */
 audioinput._audioInputEvent = function (audioInputData) {
-    try {
-        if (!audioInputData) {
-            audioinput._audioInputErrorEvent("No audioInputData received from native layer.");
-            return;
-        }
-
-        if (audioInputData.data && audioInputData.data.length > 0) {
-            var rawData;
-            // Check if data is Base64 encoded (from Android with optimization) or JSON array
-            if (audioInputData.data.charAt(0) !== '[') {
-                // Base64 encoded data from Android
-                rawData = audioinput._decodeBase64ToInt16(audioInputData.data);
-            } else {
-                // JSON array format from iOS/browser
-                rawData = JSON.parse(audioInputData.data);
-            }
-            var audioData = audioinput._normalizeAudio(rawData);
-
-            if (audioinput._cfg.streamToWebAudio && audioinput._capturing) {
-                audioinput._enqueueAudioData(audioData);
-                return;
-            }
-
-            cordova.fireWindowEvent("audioinput", {data: audioData});
-            return;
-        }
-
-        if (audioInputData.file) audioinput._audioInputFinishedEvent(audioInputData.file);
-
-        if (!audioInputData.error) return;
-
-        audioinput._audioInputErrorEvent(audioInputData.error);
-
-    } catch (ex) {
-        audioinput._audioInputErrorEvent("audioinput._audioInputEvent ex: " + ex);
+  try {
+    if (!audioInputData) {
+      audioinput._audioInputErrorEvent(
+        'No audioInputData received from native layer.',
+      );
+      return;
     }
+
+    if (audioInputData.data && audioInputData.data.length > 0) {
+      var rawData;
+      // Check if data is Base64 encoded (from Android with optimization) or JSON array
+      if (audioInputData.data.charAt(0) !== '[') {
+        // Base64 encoded data from Android
+        rawData = audioinput._decodeBase64ToInt16(audioInputData.data);
+      } else {
+        // JSON array format from iOS/browser
+        rawData = JSON.parse(audioInputData.data);
+      }
+      var audioData = audioinput._normalizeAudio(rawData);
+
+      if (audioinput._cfg.streamToWebAudio && audioinput._capturing) {
+        audioinput._enqueueAudioData(audioData);
+        return;
+      }
+
+      cordova.fireWindowEvent('audioinput', { data: audioData });
+      return;
+    }
+
+    if (audioInputData.file)
+      audioinput._audioInputFinishedEvent(audioInputData.file);
+
+    if (!audioInputData.error) return;
+
+    audioinput._audioInputErrorEvent(audioInputData.error);
+  } catch (ex) {
+    audioinput._audioInputErrorEvent('audioinput._audioInputEvent ex: ' + ex);
+  }
 };
 
 /**
@@ -412,10 +488,10 @@ audioinput._audioInputEvent = function (audioInputData) {
  * @private
  */
 audioinput._audioInputErrorEvent = function (errorMessage) {
-    cordova.fireWindowEvent("audioinputerror", {message: errorMessage});
-    if (audioinput._onErrorCallback) audioinput._onErrorCallback(errorMessage);
-    if (!audioinput._cfg.debug) return;
-    console.error("audioinput._audioInputErrorEvent: " + errorMessage);
+  cordova.fireWindowEvent('audioinputerror', { message: errorMessage });
+  if (audioinput._onErrorCallback) audioinput._onErrorCallback(errorMessage);
+  if (!audioinput._cfg.debug) return;
+  console.error('audioinput._audioInputErrorEvent: ' + errorMessage);
 };
 
 /**
@@ -424,9 +500,9 @@ audioinput._audioInputErrorEvent = function (errorMessage) {
  * @private
  */
 audioinput._audioInputFinishedEvent = function (fileUrl) {
-    cordova.fireWindowEvent("audioinputfinished", {file: fileUrl});
-    if (!audioinput._cfg.debug) return;
-    console.log("audioinput._audioInputFinishedEvent: " + fileUrl);
+  cordova.fireWindowEvent('audioinputfinished', { file: fileUrl });
+  if (!audioinput._cfg.debug) return;
+  console.log('audioinput._audioInputFinishedEvent: ' + fileUrl);
 };
 
 /**
@@ -435,9 +511,9 @@ audioinput._audioInputFinishedEvent = function (fileUrl) {
  * @private
  */
 audioinput._audioInputDebugEvent = function (debugMessage) {
-    if (!audioinput._cfg.debug) return;
-    cordova.fireWindowEvent("audioinputdebug", {message: debugMessage});
-    console.log("audioinput._audioInputFinishedEvent: " + debugMessage);
+  if (!audioinput._cfg.debug) return;
+  cordova.fireWindowEvent('audioinputdebug', { message: debugMessage });
+  console.log('audioinput._audioInputFinishedEvent: ' + debugMessage);
 };
 
 /**
@@ -445,50 +521,54 @@ audioinput._audioInputDebugEvent = function (debugMessage) {
  * @param {number[]|Int16Array} pcmData - Array of short integers which came from the plugin
  */
 audioinput._normalizeToTyped = function (pcmData) {
-    // If not normalizing and data is already Int16Array, return as-is
-    if (!audioinput._cfg.normalize) {
-        if (pcmData instanceof Int16Array) {
-            return pcmData;
-        }
-        return Int16Array.from(pcmData);
+  // If not normalizing and data is already Int16Array, return as-is
+  if (!audioinput._cfg.normalize) {
+    if (pcmData instanceof Int16Array) {
+      return pcmData;
     }
+    return Int16Array.from(pcmData);
+  }
 
-    // Normalize: use pooled buffer for better performance
-    var length = pcmData.length;
-    var out = audioinput._getPooledBuffer('float32', length);
+  // Normalize: use pooled buffer for better performance
+  var length = pcmData.length;
+  var out = audioinput._getPooledBuffer('float32', length);
 
-    for (var i = 0; i < length; i++) {
-        out[i] = audioinput._parseAsFloat(pcmData[i]) / audioinput._cfg.normalizationFactor;
+  for (var i = 0; i < length; i++) {
+    out[i] =
+      audioinput._parseAsFloat(pcmData[i]) /
+      audioinput._cfg.normalizationFactor;
+  }
+
+  // If last value is NaN, create a smaller buffer without it
+  if (isNaN(out[length - 1])) {
+    var trimmed = audioinput._getPooledBuffer('float32', length - 1);
+    for (var i = 0; i < length - 1; i++) {
+      trimmed[i] = out[i];
     }
+    audioinput._releaseBuffer('float32', out);
+    return trimmed;
+  }
 
-    // If last value is NaN, create a smaller buffer without it
-    if (isNaN(out[length - 1])) {
-        var trimmed = audioinput._getPooledBuffer('float32', length - 1);
-        for (var i = 0; i < length - 1; i++) {
-            trimmed[i] = out[i];
-        }
-        audioinput._releaseBuffer('float32', out);
-        return trimmed;
-    }
-
-    return out;
-}
+  return out;
+};
 
 /**
  * Returns a standard javascript array, normalizing if needed
  * @param {number[]} pcmData - Array of short integers which came from the plugin
  */
 audioinput._normalizeNoTyped = function (pcmData) {
-    if (!audioinput._cfg.normalize) return pcmData;
+  if (!audioinput._cfg.normalize) return pcmData;
 
-    var length = pcmData.length;
-    for (var i = 0; i < length; i++) {
-        pcmData[i] = audioinput._parseAsFloat(pcmData[i]) / audioinput._cfg.normalizationFactor;
-    }
-    if (isNaN(pcmData[length - 1])) pcmData.pop(); // If last value is NaN, remove it.
+  var length = pcmData.length;
+  for (var i = 0; i < length; i++) {
+    pcmData[i] =
+      audioinput._parseAsFloat(pcmData[i]) /
+      audioinput._cfg.normalizationFactor;
+  }
+  if (isNaN(pcmData[length - 1])) pcmData.pop(); // If last value is NaN, remove it.
 
-    return pcmData;
-}
+  return pcmData;
+};
 
 /**
  * Normalize audio input
@@ -503,51 +583,58 @@ audioinput._normalizeNoTyped = function (pcmData) {
  *
  * @returns {Int16Array|Float32Array|Array}
  */
-audioinput._normalizeAudio = hasTypedArrays ? audioinput._normalizeToTyped : audioinput._normalizeNoTyped;
+audioinput._normalizeAudio = hasTypedArrays
+  ? audioinput._normalizeToTyped
+  : audioinput._normalizeNoTyped;
 
 /**
  * Consumes data from the audioinput queue
  * @private
  */
 audioinput._getNextToPlay = function () {
-    try {
-        if (!audioinput._capturing) return;
+  try {
+    if (!audioinput._capturing) return;
 
-        if (!(audioinput._audioDataQueue && audioinput._audioDataQueue.length > 0)) {
-            audioinput._timerGetNextAudio = setTimeout(audioinput._getNextToPlay, 100);
-            return;
-        }
-
-        // Collect chunks without concatenation to determine total length
-        var chunks = [];
-        var totalLength = 0;
-        for (var i = 0; i < audioinput._cfg.concatenateMaxChunks; i++) {
-            if (audioinput._audioDataQueue.length === 0) break;
-            var chunk = audioinput._dequeueAudioData();
-            chunks.push(chunk);
-            totalLength += chunk.length;
-        }
-
-        // Use pooled buffer for concatenation
-        var bufferType = audioinput._cfg.normalize ? 'float32' : 'int16';
-        var concatenatedData = audioinput._getPooledBuffer(bufferType, totalLength);
-        var offset = 0;
-        for (var i = 0; i < chunks.length; i++) {
-            concatenatedData.set(chunks[i], offset);
-            offset += chunks[i].length;
-        }
-
-        audioinput._timerGetNextAudio = setTimeout(audioinput._getNextToPlay,
-            audioinput._playAudio(concatenatedData) * 1000);
-
-        // Release the buffer after playing (playAudio is synchronous for buffer creation)
-        audioinput._releaseBuffer(bufferType, concatenatedData);
-
-    } catch (ex) {
-        audioinput._audioInputErrorEvent("audioinput._getNextToPlay ex: " + ex);
+    if (
+      !(audioinput._audioDataQueue && audioinput._audioDataQueue.length > 0)
+    ) {
+      audioinput._timerGetNextAudio = setTimeout(
+        audioinput._getNextToPlay,
+        100,
+      );
+      return;
     }
-};
 
+    // Collect chunks without concatenation to determine total length
+    var chunks = [];
+    var totalLength = 0;
+    for (var i = 0; i < audioinput._cfg.concatenateMaxChunks; i++) {
+      if (audioinput._audioDataQueue.length === 0) break;
+      var chunk = audioinput._dequeueAudioData();
+      chunks.push(chunk);
+      totalLength += chunk.length;
+    }
+
+    // Use pooled buffer for concatenation
+    var bufferType = audioinput._cfg.normalize ? 'float32' : 'int16';
+    var concatenatedData = audioinput._getPooledBuffer(bufferType, totalLength);
+    var offset = 0;
+    for (var i = 0; i < chunks.length; i++) {
+      concatenatedData.set(chunks[i], offset);
+      offset += chunks[i].length;
+    }
+
+    audioinput._timerGetNextAudio = setTimeout(
+      audioinput._getNextToPlay,
+      audioinput._playAudio(concatenatedData) * 1000,
+    );
+
+    // Release the buffer after playing (playAudio is synchronous for buffer creation)
+    audioinput._releaseBuffer(bufferType, concatenatedData);
+  } catch (ex) {
+    audioinput._audioInputErrorEvent('audioinput._getNextToPlay ex: ' + ex);
+  }
+};
 
 /**
  * Play audio using the Web Audio API
@@ -556,65 +643,71 @@ audioinput._getNextToPlay = function () {
  * @private
  */
 audioinput._playAudio = function (data) {
-    try {
-        if (data && data.length > 0) {
-            var audioBuffer = audioinput._audioContext.createBuffer(audioinput._cfg.channels, (data.length / audioinput._cfg.channels), audioinput._cfg.sampleRate),
-                chdata = [],
-                index = 0;
+  try {
+    if (data && data.length > 0) {
+      var audioBuffer = audioinput._audioContext.createBuffer(
+          audioinput._cfg.channels,
+          data.length / audioinput._cfg.channels,
+          audioinput._cfg.sampleRate,
+        ),
+        chdata = [],
+        index = 0;
 
-            if (audioinput._cfg.channels > 1) {
-                for (var i = 0; i < audioinput._cfg.channels; i++) {
-                    chdata = [];
-                    index = 0;
-                    while (index < data.length) {
-                        chdata.push(data[index + i]);
-                        index += parseInt(audioinput._cfg.channels);
-                    }
+      if (audioinput._cfg.channels > 1) {
+        for (var i = 0; i < audioinput._cfg.channels; i++) {
+          chdata = [];
+          index = 0;
+          while (index < data.length) {
+            chdata.push(data[index + i]);
+            index += parseInt(audioinput._cfg.channels);
+          }
 
-                    audioBuffer.getChannelData(i).set(new Float32Array(chdata));
-                }
-            } else {
-                audioBuffer.getChannelData(0).set(data);
-            }
-
-            var source = audioinput._audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioinput._micGainNode);
-            source.start(0);
-
-            return audioBuffer.duration;
+          audioBuffer.getChannelData(i).set(new Float32Array(chdata));
         }
-    } catch (ex) {
-        audioinput._audioInputErrorEvent("audioinput._playAudio ex: " + ex);
+      } else {
+        audioBuffer.getChannelData(0).set(data);
+      }
+
+      var source = audioinput._audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioinput._micGainNode);
+      source.start(0);
+
+      return audioBuffer.duration;
     }
+  } catch (ex) {
+    audioinput._audioInputErrorEvent('audioinput._playAudio ex: ' + ex);
+  }
 
-    return 0;
+  return 0;
 };
-
 
 /**
  * Creates the Web Audio Context and audio nodes for output.
  * @private
  */
 audioinput._initWebAudio = function (audioCtxFromCfg) {
-    try {
-        if (audioCtxFromCfg) {
-            audioinput._audioContext = audioCtxFromCfg;
-        } else if (!audioinput._audioContext) {
-            window.AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioinput._audioContext = new window.AudioContext();
-            audioinput._webAudioAPISupported = true;
-        }
-
-        // Create a gain node for volume control
-        if (!audioinput._micGainNode) audioinput._micGainNode = audioinput._audioContext.createGain();
-
-        return true;
-    } catch (e) {
-        audioinput._webAudioAPISupported = false;
-        audioinput._audioInputDebugEvent("_initWebAudio - Web Audio is not supported on this platform.");
-        return false;
+  try {
+    if (audioCtxFromCfg) {
+      audioinput._audioContext = audioCtxFromCfg;
+    } else if (!audioinput._audioContext) {
+      window.AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioinput._audioContext = new window.AudioContext();
+      audioinput._webAudioAPISupported = true;
     }
+
+    // Create a gain node for volume control
+    if (!audioinput._micGainNode)
+      audioinput._micGainNode = audioinput._audioContext.createGain();
+
+    return true;
+  } catch (e) {
+    audioinput._webAudioAPISupported = false;
+    audioinput._audioInputDebugEvent(
+      '_initWebAudio - Web Audio is not supported on this platform.',
+    );
+    return false;
+  }
 };
 
 /**
@@ -624,7 +717,7 @@ audioinput._initWebAudio = function (audioCtxFromCfg) {
  * @private
  */
 audioinput._enqueueAudioData = function (data) {
-    audioinput._audioDataQueue.push(data);
+  audioinput._audioDataQueue.push(data);
 };
 
 /**
@@ -634,7 +727,7 @@ audioinput._enqueueAudioData = function (data) {
  * @private
  */
 audioinput._dequeueAudioData = function () {
-    return audioinput._audioDataQueue.shift();
+  return audioinput._audioDataQueue.shift();
 };
 
 /**
@@ -644,8 +737,8 @@ audioinput._dequeueAudioData = function () {
  * @private
  */
 audioinput._parseAsFloat = function (num) {
-    if (isNaN(num)) return 0.0;
-    return parseFloat(num);
-}
+  if (isNaN(num)) return 0.0;
+  return parseFloat(num);
+};
 
 module.exports = audioinput;
