@@ -115,14 +115,40 @@ The test app provides buttons to:
 2. **Check Permission** - Verify current permission status
 3. **Start Capture** - Begin audio capture
 4. **Stop Capture** - Stop audio capture
-5. **Clear Log** - Clear the status log
+5. **Play Recording** - Play back captured audio from manual mode
+6. **Run Benchmark** - Run timed on-device capture benchmarks
+7. **Stop Benchmark** - Stop an active benchmark early
+8. **Clear Log** - Clear the status log
 
 The status area will show:
 - Platform information
 - Plugin loading status
 - Permission status
 - Audio capture events
+- Benchmark summary metrics and JSON result payload
 - Any errors that occur
+
+## On-Device Benchmarking
+
+Use the **On-Device Benchmark** panel to compare real device behavior across capture settings.
+
+1. Set benchmark config:
+   - `sampleRate`
+   - `bufferSize`
+   - `channels`
+   - `normalize`
+   - `duration`
+2. Tap **Run Benchmark**
+3. Wait for completion (or tap **Stop Benchmark**)
+4. Copy the JSON output from the benchmark panel for sharing/comparison
+
+Key metrics:
+- `intervals.expectedMs`: theoretical chunk interval from `bufferSize / sampleRate`
+- `intervals.avgMs` / `p95Ms` / `stdDevMs`: observed chunk delivery timing
+- `intervals.p95JitterMs`: p95 absolute deviation from expected interval
+- `handler.busyRatioPct`: approximate JS callback work time as a share of capture window
+- `totals.effectiveSampleRate`: delivered samples per second
+- `totals.driftMs`: observed timing drift vs sample-count-derived duration
 
 ## Updating the Plugin
 

@@ -2,6 +2,7 @@ package com.exelerus.audioinput
 
 import android.Manifest
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.os.Message
 import android.util.Base64
@@ -34,7 +35,9 @@ import java.nio.ByteOrder
 class AudioInputPlugin : Plugin() {
 
     private var receiver: AudioInputReceiver? = null
-    private val handler = AudioInputHandler(this)
+    private val processingThread = HandlerThread("AudioInputProcessing").apply { start() }
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val handler = AudioInputHandler(this, processingThread.looper)
 
     private var sampleRate: Int = 44100
     private var bufferSize: Int = 16384
@@ -44,6 +47,8 @@ class AudioInputPlugin : Plugin() {
     private var fileUrl: URI? = null
     private var normalize: Boolean = true
     private var normalizationFactor: Double = 32767.0
+    private var isCapturingState: Boolean = false
+    private var lastFinishedFileUrl: String? = null
 
     @PluginMethod
     fun initialize(call: PluginCall) {
@@ -59,6 +64,7 @@ class AudioInputPlugin : Plugin() {
             val fileUrlString = call.getString("fileUrl")
             fileUrl = if (fileUrlString != null) URI(fileUrlString) else null
 
+            emitStateChange("idle")
             call.resolve()
         } catch (e: Exception) {
             call.reject("Initialization failed: ${e.message}", e)
@@ -98,6 +104,7 @@ class AudioInputPlugin : Plugin() {
 
             val fileUrlString = call.getString("fileUrl")
             fileUrl = if (fileUrlString != null) URI(fileUrlString) else null
+            lastFinishedFileUrl = null
 
             // Check permission and request if not granted
             if (getPermissionState("microphone") != com.getcapacitor.PermissionState.GRANTED) {
@@ -107,8 +114,11 @@ class AudioInputPlugin : Plugin() {
 
             // Permission granted, start recording
             startRecording()
+            isCapturingState = true
+            emitStateChange("capturing")
             call.resolve()
         } catch (e: Exception) {
+            emitStateChange("error", e.message ?: "Failed to start audio capture")
             call.reject("Failed to start audio capture: ${e.message}", e)
         }
     }
@@ -138,11 +148,15 @@ class AudioInputPlugin : Plugin() {
         if (getPermissionState("microphone") == com.getcapacitor.PermissionState.GRANTED) {
             try {
                 startRecording()
+                isCapturingState = true
+                emitStateChange("capturing")
                 call.resolve()
             } catch (e: Exception) {
+                emitStateChange("error", e.message ?: "Failed to start audio capture")
                 call.reject("Failed to start audio capture: ${e.message}", e)
             }
         } else {
+            emitStateChange("error", "Microphone permission denied")
             call.reject("Microphone permission denied")
         }
     }
@@ -152,18 +166,101 @@ class AudioInputPlugin : Plugin() {
         try {
             receiver?.interrupt()
             receiver = null
+            isCapturingState = false
 
             val ret = JSObject()
+            val fileUrlToReturn = lastFinishedFileUrl ?: fileUrl?.toString()
+            if (fileUrlToReturn != null) {
+                ret.put("fileUrl", fileUrlToReturn)
+            }
+            emitStateChange("stopped")
             call.resolve(ret)
         } catch (e: Exception) {
+            emitStateChange("error", e.message ?: "Failed to stop audio capture")
             call.reject("Failed to stop audio capture: ${e.message}", e)
         }
+    }
+
+    @PluginMethod
+    fun isCapturing(call: PluginCall) {
+        val ret = JSObject()
+        ret.put("capturing", isCapturingState)
+        call.resolve(ret)
+    }
+
+    @PluginMethod
+    fun getCfg(call: PluginCall) {
+        call.resolve(buildCfg())
     }
 
     override fun handleOnDestroy() {
         receiver?.interrupt()
         receiver = null
+        isCapturingState = false
+        processingThread.quitSafely()
         super.handleOnDestroy()
+    }
+
+    private fun emitAudioData(audioData: JSONArray) {
+        mainHandler.post {
+            val ret = JSObject()
+            ret.put("data", audioData)
+            ret.put("sampleRate", sampleRate)
+            ret.put("channels", channels)
+            ret.put("format", format)
+            ret.put("timestamp", System.currentTimeMillis())
+            notifyListeners("audioData", ret)
+        }
+    }
+
+    private fun emitAudioError(message: String, code: String? = null) {
+        mainHandler.post {
+            val ret = JSObject()
+            ret.put("message", message)
+            if (code != null) {
+                ret.put("code", code)
+            }
+            notifyListeners("audioError", ret)
+        }
+    }
+
+    private fun emitAudioFinished(file: String) {
+        lastFinishedFileUrl = file
+        isCapturingState = false
+        mainHandler.post {
+            val ret = JSObject()
+            ret.put("fileUrl", file)
+            ret.put("timestamp", System.currentTimeMillis())
+            notifyListeners("audioInputFinished", ret)
+        }
+        emitStateChange("stopped")
+    }
+
+    private fun emitStateChange(state: String, message: String? = null) {
+        mainHandler.post {
+            val ret = JSObject()
+            ret.put("state", state)
+            ret.put("timestamp", System.currentTimeMillis())
+            if (message != null) {
+                ret.put("message", message)
+            }
+            notifyListeners("stateChange", ret)
+        }
+    }
+
+    private fun buildCfg(): JSObject {
+        val cfg = JSObject()
+        cfg.put("sampleRate", sampleRate)
+        cfg.put("bufferSize", bufferSize)
+        cfg.put("channels", channels)
+        cfg.put("format", format)
+        cfg.put("audioSourceType", audioSource)
+        cfg.put("normalize", normalize)
+        cfg.put("normalizationFactor", normalizationFactor)
+        if (fileUrl != null) {
+            cfg.put("fileUrl", fileUrl.toString())
+        }
+        return cfg
     }
 
     /**
@@ -180,7 +277,7 @@ class AudioInputPlugin : Plugin() {
     /**
      * Handler for receiving audio data from AudioInputReceiver
      */
-    private class AudioInputHandler(plugin: AudioInputPlugin) : Handler(Looper.getMainLooper()) {
+    private class AudioInputHandler(plugin: AudioInputPlugin, looper: Looper) : Handler(looper) {
         private val pluginRef = WeakReference(plugin)
 
         override fun handleMessage(msg: Message) {
@@ -188,10 +285,26 @@ class AudioInputPlugin : Plugin() {
 
             try {
                 val data = msg.data.getString("data")
+                val dataBytes = msg.data.getByteArray("dataBytes")
                 val error = msg.data.getString("error")
                 val file = msg.data.getString("file")
 
                 when {
+                    dataBytes != null -> {
+                        val buffer = ByteBuffer.wrap(dataBytes).order(ByteOrder.LITTLE_ENDIAN)
+
+                        val audioData = JSONArray()
+                        while (buffer.remaining() >= 2) {
+                            val sample = buffer.short
+                            if (plugin.normalize) {
+                                audioData.put((sample.toDouble() / plugin.normalizationFactor))
+                            } else {
+                                audioData.put(sample.toInt())
+                            }
+                        }
+
+                        plugin.emitAudioData(audioData)
+                    }
                     data != null -> {
                         // Audio data received as Base64 - decode and convert
                         val bytes = Base64.decode(data, Base64.NO_WRAP)
@@ -207,27 +320,19 @@ class AudioInputPlugin : Plugin() {
                             }
                         }
 
-                        val ret = JSObject()
-                        ret.put("data", audioData)
-                        plugin.notifyListeners("audioData", ret)
+                        plugin.emitAudioData(audioData)
                     }
                     error != null -> {
-                        // Error occurred
-                        val ret = JSObject()
-                        ret.put("message", error)
-                        plugin.notifyListeners("audioError", ret)
+                        plugin.emitAudioError(error)
+                        plugin.emitStateChange("error", error)
                     }
                     file != null -> {
-                        // File recording finished
-                        val ret = JSObject()
-                        ret.put("fileUrl", file)
-                        plugin.notifyListeners("audioInputFinished", ret)
+                        plugin.emitAudioFinished(file)
                     }
                 }
             } catch (e: Exception) {
-                val ret = JSObject()
-                ret.put("message", "Handler error: ${e.message}")
-                plugin.notifyListeners("audioError", ret)
+                plugin.emitAudioError("Handler error: ${e.message}", "NATIVE_HANDLER_ERROR")
+                plugin.emitStateChange("error", "Handler error: ${e.message}")
             }
         }
     }

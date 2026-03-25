@@ -26,7 +26,6 @@ import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.util.Base64;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -73,6 +72,7 @@ public class AudioInputReceiver extends Thread {
      */
     private ByteBuffer byteBuffer;
     private short[] audioBuffer;
+    private byte[] streamAudioBuffer;
     private byte[] fileAudioBuffer;
 
     public AudioInputReceiver() {
@@ -125,6 +125,7 @@ public class AudioInputReceiver extends Thread {
         this.audioBuffer = new short[readBufferSize];
         this.byteBuffer = ByteBuffer.allocate(readBufferSize * 2);
         this.byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        this.streamAudioBuffer = new byte[readBufferSize];
         this.fileAudioBuffer = new byte[readBufferSize];
     }
 
@@ -138,35 +139,80 @@ public class AudioInputReceiver extends Thread {
             // Forward audio data to Cordova Web app
             //
 
+            int numReadSamples = 0;
             int numReadBytes = 0;
             synchronized (this) {
                 recorder.startRecording();
 
                 try {
                     while (!isInterrupted()) {
-                        numReadBytes = recorder.read(audioBuffer, 0, readBufferSize);
+                        if (audioFormat == AudioFormat.ENCODING_PCM_8BIT) {
+                            numReadBytes = recorder.read(streamAudioBuffer, 0, readBufferSize);
 
-                        if (numReadBytes > 0) {
-                            try {
-                                // Reuse ByteBuffer to reduce allocations
-                                byteBuffer.clear();
-                                for (int i = 0; i < numReadBytes; i++) {
-                                    byteBuffer.putShort(audioBuffer[i]);
+                            if (numReadBytes > 0) {
+                                try {
+                                    // Convert unsigned 8-bit PCM to signed 16-bit PCM for consistent JS payload shape.
+                                    byteBuffer.clear();
+                                    for (int i = 0; i < numReadBytes; i++) {
+                                        int sample8 = (streamAudioBuffer[i] & 0xFF) - 128;
+                                        short sample16 = (short) (sample8 << 8);
+                                        byteBuffer.putShort(sample16);
+                                    }
+
+                                    byte[] dataBytes = new byte[numReadBytes * 2];
+                                    System.arraycopy(byteBuffer.array(), 0, dataBytes, 0, numReadBytes * 2);
+
+                                    message = handler.obtainMessage();
+                                    messageBundle.clear();
+                                    messageBundle.putByteArray("dataBytes", dataBytes);
+                                    message.setData(messageBundle);
+                                    handler.sendMessage(message);
+                                } catch (Exception ex) {
+                                    message = handler.obtainMessage();
+                                    messageBundle.clear();
+                                    messageBundle.putString("error", ex.toString());
+                                    message.setData(messageBundle);
+                                    handler.sendMessage(message);
                                 }
-
-                                // Encode to Base64 - only encode the used portion
-                                String encoded = Base64.encodeToString(byteBuffer.array(), 0, numReadBytes * 2, Base64.NO_WRAP);
-
-                                // Reuse message and bundle to reduce allocations
+                            } else if (numReadBytes < 0) {
                                 message = handler.obtainMessage();
                                 messageBundle.clear();
-                                messageBundle.putString("data", encoded);
+                                messageBundle.putString("error", "AudioRecord read error (8-bit): " + numReadBytes);
                                 message.setData(messageBundle);
                                 handler.sendMessage(message);
-                            } catch (Exception ex) {
+                            }
+                        } else {
+                            numReadSamples = recorder.read(audioBuffer, 0, readBufferSize);
+
+                            if (numReadSamples > 0) {
+                                try {
+                                    // Reuse ByteBuffer to reduce allocations
+                                    byteBuffer.clear();
+                                    for (int i = 0; i < numReadSamples; i++) {
+                                        byteBuffer.putShort(audioBuffer[i]);
+                                    }
+
+                                    // Encode to Base64 - only encode the used portion
+                                    byte[] dataBytes = new byte[numReadSamples * 2];
+                                    System.arraycopy(byteBuffer.array(), 0, dataBytes, 0, numReadSamples * 2);
+
+                                    // Reuse message and bundle to reduce allocations
+                                    message = handler.obtainMessage();
+                                    messageBundle.clear();
+                                    messageBundle.putByteArray("dataBytes", dataBytes);
+                                    message.setData(messageBundle);
+                                    handler.sendMessage(message);
+                                } catch (Exception ex) {
+                                    message = handler.obtainMessage();
+                                    messageBundle.clear();
+                                    messageBundle.putString("error", ex.toString());
+                                    message.setData(messageBundle);
+                                    handler.sendMessage(message);
+                                }
+                            } else if (numReadSamples < 0) {
                                 message = handler.obtainMessage();
                                 messageBundle.clear();
-                                messageBundle.putString("error", ex.toString());
+                                messageBundle.putString("error", "AudioRecord read error (16-bit): " + numReadSamples);
                                 message.setData(messageBundle);
                                 handler.sendMessage(message);
                             }
@@ -255,8 +301,7 @@ public class AudioInputReceiver extends Thread {
             int myBlockAlign = (int) (myChannels * myBitsPerSample / 8);
 
             long myDataSize = fPCM.length();
-            long myChunk2Size = myDataSize * myChannels * myBitsPerSample / 8;
-            long myChunkSize = 36 + myChunk2Size;
+            long myChunkSize = 36 + myDataSize;
 
             OutputStream os = new FileOutputStream(wav);
             BufferedOutputStream bos = new BufferedOutputStream(os);

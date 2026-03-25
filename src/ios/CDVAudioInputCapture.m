@@ -13,7 +13,7 @@
 - (void)start:(CDVInvokedUrlCommand*)command;
 - (void)stop:(CDVInvokedUrlCommand*)command;
 - (void)startRecording:(CDVInvokedUrlCommand*)command;
-- (void)didReceiveAudioData:(short*)data dataLength:(int)length;
+- (void)didReceiveAudioData:(NSData*)data dataLength:(int)length;
 - (void)didEncounterError:(NSString*)msg;
 - (void)didFinish:(NSString*)url;
 
@@ -123,27 +123,21 @@
 }
 
 
-- (void)didReceiveAudioData:(short*)data dataLength:(int)length
+- (void)didReceiveAudioData:(NSData*)data dataLength:(int)length
 {
     [self.commandDelegate runInBackground:^{
         @try {
-            NSMutableArray *mutableArray = [NSMutableArray arrayWithCapacity:length];
-
-            if(length == 0) {
+            NSUInteger availableSamples = data.length / sizeof(short);
+            NSUInteger sampleCount = MIN((NSUInteger)length, availableSamples);
+            if(sampleCount == 0) {
                 // We'll ignore empty data for now
             }
             else {
-                for (int i = 0; i < length; i++) {
-                    NSNumber *number = [[NSNumber alloc] initWithShort:data[i]];
-                    [mutableArray addObject:number];
-                }
-
-                NSString *str = [mutableArray componentsJoinedByString:@","];
-                NSString *dataStr = [NSString stringWithFormat:@"[%@]", str];
-                NSDictionary* audioData = [NSDictionary dictionaryWithObject:[NSString stringWithString:dataStr] forKey:@"data"];
+                NSUInteger bytesToSend = sampleCount * sizeof(short);
+                NSData *pcmData = [data subdataWithRange:NSMakeRange(0, bytesToSend)];
 
                 if (self.callbackId) {
-                    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:audioData];
+                    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArrayBuffer:pcmData];
                     [result setKeepCallbackAsBool:YES];
                     [self.commandDelegate sendPluginResult:result callbackId:self.callbackId];
                 }

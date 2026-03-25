@@ -22,6 +22,7 @@ package com.exelerus.cordova.audioinputcapture;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
@@ -243,6 +244,14 @@ public class AudioInputCapture extends CordovaPlugin {
         }
     }
 
+    private void sendUpdate(byte[] info, boolean keepCallback) {
+        if (this.callbackContext != null) {
+            PluginResult result = new PluginResult(PluginResult.Status.OK, info);
+            result.setKeepCallback(keepCallback);
+            this.callbackContext.sendPluginResult(result);
+        }
+    }
+
     private static class AudioInputCaptureHandler extends Handler {
 
         private final WeakReference<AudioInputCapture> mActivity;
@@ -255,29 +264,38 @@ public class AudioInputCapture extends CordovaPlugin {
         public void handleMessage(Message msg) {
             AudioInputCapture activity = mActivity.get();
             if (activity != null) {
+                Bundle data = msg.getData();
+                byte[] dataBytes = data.getByteArray("dataBytes");
+                String error = data.getString("error");
+                String file = data.getString("file");
+
+                if (dataBytes != null) {
+                    activity.sendUpdate(dataBytes, true);
+                    return;
+                }
+
                 JSONObject info = new JSONObject();
 
-                try {
-                    info.put("data", msg.getData().getString("data"));
-                } catch (JSONException e) {
-                    Log.e(LOG_TAG, e.getMessage(), e);
-                }
-
-                try {
-                    info.put("error", msg.getData().getString("error"));
-                } catch (JSONException e) {
-                    Log.e(LOG_TAG, e.getMessage(), e);
-                }
-
-                if (activity.fileUrl != null) {
+                if (error != null) {
                     try {
-                        info.put("file", msg.getData().getString("file"));
-                        activity.sendUpdate(info, false); // Release status callback in JS side
-                        activity.callbackContext = null;
+                        info.put("error", error);
                     } catch (JSONException e) {
                         Log.e(LOG_TAG, e.getMessage(), e);
                     }
-                } else {
+                }
+
+                if (file != null) {
+                    try {
+                        info.put("file", file);
+                    } catch (JSONException e) {
+                        Log.e(LOG_TAG, e.getMessage(), e);
+                    }
+                }
+
+                if (activity.fileUrl != null && file != null) {
+                    activity.sendUpdate(info, false); // Release status callback in JS side
+                    activity.callbackContext = null;
+                } else if (info.length() > 0) {
                     activity.sendUpdate(info, true);
                 }
             }

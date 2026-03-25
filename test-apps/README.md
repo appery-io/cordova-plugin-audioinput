@@ -76,16 +76,34 @@ claude/analyze-plugin-capacitor-011CUyE1dcag6xBDyjquHEBY
 5. **Test the functionality** using the test UI
 6. **Iterate:** Make more changes, push, and reinstall
 
+For performance-focused work, run the on-device benchmark panel in either app and compare JSON outputs between branches/devices.
+
 ## Features of the Test Apps
 
 Both test apps include:
 
 - ✅ **Permission Testing** - Request and check microphone permissions
 - ✅ **Audio Capture** - Start and stop audio capture
+- ✅ **Playback Check** - Play manual recording output
+- ✅ **On-Device Benchmarking** - Timed benchmark runs with configurable capture settings
 - ✅ **Real-time Feedback** - See audio data events in real-time
 - ✅ **Error Handling** - Display any errors that occur
 - ✅ **Plugin Detection** - Verify the plugin is loaded correctly
 - ✅ **Simple UI** - Easy-to-use interface for testing
+
+## Benchmark Workflow
+
+Use the **On-Device Benchmark** panel in either test app to measure practical runtime behavior:
+
+1. Select `sampleRate`, `bufferSize`, `channels`, `normalize`, and `duration`
+2. Run benchmark and wait for completion
+3. Collect benchmark JSON payload from the UI
+4. Compare key metrics across plugin branches and devices:
+   - chunk interval avg/p95/stddev
+   - p95 jitter
+   - effective sample rate
+   - callback busy ratio
+   - drift vs sample-count-derived duration
 
 ## Requirements
 

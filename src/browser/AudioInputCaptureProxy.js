@@ -114,7 +114,9 @@ function start(success, error, opts) {
   audioSourceType = opts[4] || audioSourceType;
   fileUrl = opts[5] || fileUrl;
   // the URL must be converted to a cdvfile:... URL to ensure it's readable from the outside
-  fileUrl = fileUrl.replace('filesystem:file:///', 'cdvfile://localhost/');
+  if (typeof fileUrl === 'string' && fileUrl.length > 0) {
+    fileUrl = fileUrl.replace('filesystem:file:///', 'cdvfile://localhost/');
+  }
   console.log('AudioInputCaptureProxy: start - fileUrl: ' + fileUrl);
 
   if (!audioRecorder) {
@@ -245,6 +247,11 @@ function gotBuffers(wav) {
 }
 
 function doneEncoding(blob) {
+  if (!fileUrl || !fileSystem) {
+    onStopped(fileUrl || null);
+    return;
+  }
+
   console.log('AudioInputCaptureProxy: doneEncoding - write to: ' + fileUrl);
   var fileName = fileUrl.replace(/.*\//, '');
   console.log(

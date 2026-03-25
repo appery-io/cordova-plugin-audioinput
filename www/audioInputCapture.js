@@ -162,11 +162,13 @@ audioinput.start = function (cfg) {
   );
 
   audioinput._capturing = true;
+  audioinput._emitStateChange('capturing');
 
   if (!audioinput._cfg.streamToWebAudio) return;
 
   if (audioinput._initWebAudio(audioinput._cfg.audioContext)) {
     audioinput._audioDataQueue = [];
+    audioinput._audioDataReadIndex = 0;
     audioinput._getNextToPlay();
     return;
   }
@@ -187,11 +189,13 @@ audioinput.stop = function (onStopped) {
       [],
     );
     audioinput._capturing = false;
+    audioinput._emitStateChange('stopped');
   }
 
   if (audioinput._timerGetNextAudio)
     clearTimeout(audioinput._timerGetNextAudio);
   audioinput._audioDataQueue = null;
+  audioinput._audioDataReadIndex = 0;
 
   // Clear buffer pools to free memory
   audioinput._clearBufferPools();
@@ -256,6 +260,7 @@ audioinput.isCapturing = function () {
 
 audioinput._capturing = false;
 audioinput._audioDataQueue = null;
+audioinput._audioDataReadIndex = 0;
 audioinput._timerGetNextAudio = null;
 audioinput._audioContext = null;
 audioinput._micGainNode = null;
@@ -450,16 +455,54 @@ audioinput._audioInputEvent = function (audioInputData) {
       return;
     }
 
-    if (audioInputData.data && audioInputData.data.length > 0) {
-      var rawData;
-      // Check if data is Base64 encoded (from Android with optimization) or JSON array
-      if (audioInputData.data.charAt(0) !== '[') {
-        // Base64 encoded data from Android
-        rawData = audioinput._decodeBase64ToInt16(audioInputData.data);
-      } else {
-        // JSON array format from iOS/browser
-        rawData = JSON.parse(audioInputData.data);
+    var rawData = null;
+    var eventMeta = null;
+
+    if (audioInputData instanceof ArrayBuffer) {
+      rawData = new Int16Array(audioInputData);
+    } else if (
+      typeof ArrayBuffer !== 'undefined' &&
+      ArrayBuffer.isView &&
+      ArrayBuffer.isView(audioInputData)
+    ) {
+      rawData = new Int16Array(
+        audioInputData.buffer,
+        audioInputData.byteOffset,
+        Math.floor(audioInputData.byteLength / 2),
+      );
+    } else if (
+      audioInputData.data &&
+      (audioInputData.data.length > 0 || audioInputData.data.byteLength > 0)
+    ) {
+      eventMeta = audioInputData;
+
+      if (audioInputData.data instanceof ArrayBuffer) {
+        rawData = new Int16Array(audioInputData.data);
+      } else if (
+        typeof ArrayBuffer !== 'undefined' &&
+        ArrayBuffer.isView &&
+        ArrayBuffer.isView(audioInputData.data)
+      ) {
+        rawData = new Int16Array(
+          audioInputData.data.buffer,
+          audioInputData.data.byteOffset,
+          Math.floor(audioInputData.data.byteLength / 2),
+        );
+      } else if (Array.isArray(audioInputData.data)) {
+        rawData = audioInputData.data;
+      } else if (typeof audioInputData.data === 'string') {
+        // Check if data is Base64 encoded (from Android with optimization) or JSON array
+        if (audioInputData.data.charAt(0) !== '[') {
+          // Base64 encoded data from Android
+          rawData = audioinput._decodeBase64ToInt16(audioInputData.data);
+        } else {
+          // JSON array format from iOS/browser
+          rawData = JSON.parse(audioInputData.data);
+        }
       }
+    }
+
+    if (rawData && rawData.length > 0) {
       var audioData = audioinput._normalizeAudio(rawData);
 
       if (audioinput._cfg.streamToWebAudio && audioinput._capturing) {
@@ -467,7 +510,13 @@ audioinput._audioInputEvent = function (audioInputData) {
         return;
       }
 
-      cordova.fireWindowEvent('audioinput', { data: audioData });
+      cordova.fireWindowEvent('audioinput', {
+        data: audioData,
+        sampleRate: (eventMeta && eventMeta.sampleRate) || audioinput._cfg.sampleRate,
+        channels: (eventMeta && eventMeta.channels) || audioinput._cfg.channels,
+        format: (eventMeta && eventMeta.format) || audioinput._cfg.format,
+        timestamp: (eventMeta && eventMeta.timestamp) || Date.now(),
+      });
       return;
     }
 
@@ -489,6 +538,7 @@ audioinput._audioInputEvent = function (audioInputData) {
  */
 audioinput._audioInputErrorEvent = function (errorMessage) {
   cordova.fireWindowEvent('audioinputerror', { message: errorMessage });
+  audioinput._emitStateChange('error', errorMessage);
   if (audioinput._onErrorCallback) audioinput._onErrorCallback(errorMessage);
   if (!audioinput._cfg.debug) return;
   console.error('audioinput._audioInputErrorEvent: ' + errorMessage);
@@ -500,7 +550,11 @@ audioinput._audioInputErrorEvent = function (errorMessage) {
  * @private
  */
 audioinput._audioInputFinishedEvent = function (fileUrl) {
-  cordova.fireWindowEvent('audioinputfinished', { file: fileUrl });
+  cordova.fireWindowEvent('audioinputfinished', {
+    file: fileUrl,
+    timestamp: Date.now(),
+  });
+  audioinput._emitStateChange('stopped');
   if (!audioinput._cfg.debug) return;
   console.log('audioinput._audioInputFinishedEvent: ' + fileUrl);
 };
@@ -514,6 +568,15 @@ audioinput._audioInputDebugEvent = function (debugMessage) {
   if (!audioinput._cfg.debug) return;
   cordova.fireWindowEvent('audioinputdebug', { message: debugMessage });
   console.log('audioinput._audioInputFinishedEvent: ' + debugMessage);
+};
+
+audioinput._emitStateChange = function (state, message) {
+  var payload = {
+    state: state,
+    timestamp: Date.now(),
+  };
+  if (message) payload.message = message;
+  cordova.fireWindowEvent('audioinputstatechange', payload);
 };
 
 /**
@@ -534,9 +597,11 @@ audioinput._normalizeToTyped = function (pcmData) {
   var out = audioinput._getPooledBuffer('float32', length);
 
   for (var i = 0; i < length; i++) {
-    out[i] =
-      audioinput._parseAsFloat(pcmData[i]) /
-      audioinput._cfg.normalizationFactor;
+    var sample = pcmData[i];
+    if (typeof sample !== 'number') {
+      sample = audioinput._parseAsFloat(sample);
+    }
+    out[i] = sample / audioinput._cfg.normalizationFactor;
   }
 
   // If last value is NaN, create a smaller buffer without it
@@ -595,9 +660,7 @@ audioinput._getNextToPlay = function () {
   try {
     if (!audioinput._capturing) return;
 
-    if (
-      !(audioinput._audioDataQueue && audioinput._audioDataQueue.length > 0)
-    ) {
+    if (audioinput._getAudioDataQueueLength() <= 0) {
       audioinput._timerGetNextAudio = setTimeout(
         audioinput._getNextToPlay,
         100,
@@ -609,28 +672,55 @@ audioinput._getNextToPlay = function () {
     var chunks = [];
     var totalLength = 0;
     for (var i = 0; i < audioinput._cfg.concatenateMaxChunks; i++) {
-      if (audioinput._audioDataQueue.length === 0) break;
+      if (audioinput._getAudioDataQueueLength() === 0) break;
       var chunk = audioinput._dequeueAudioData();
+      if (!chunk) break;
       chunks.push(chunk);
       totalLength += chunk.length;
     }
 
-    // Use pooled buffer for concatenation
     var bufferType = audioinput._cfg.normalize ? 'float32' : 'int16';
-    var concatenatedData = audioinput._getPooledBuffer(bufferType, totalLength);
-    var offset = 0;
-    for (var i = 0; i < chunks.length; i++) {
-      concatenatedData.set(chunks[i], offset);
-      offset += chunks[i].length;
+    var playbackData;
+
+    if (chunks.length === 0) {
+      audioinput._timerGetNextAudio = setTimeout(
+        audioinput._getNextToPlay,
+        100,
+      );
+      return;
+    }
+
+    if (chunks.length === 1) {
+      playbackData = chunks[0];
+    } else {
+      // Use pooled buffer for concatenation only when needed.
+      playbackData = audioinput._getPooledBuffer(bufferType, totalLength);
+      var offset = 0;
+      for (var i = 0; i < chunks.length; i++) {
+        var chunk = chunks[i];
+        playbackData.set(chunk, offset);
+        offset += chunk.length;
+
+        // Return consumed chunks to the pool when possible.
+        if (chunk instanceof Float32Array) {
+          audioinput._releaseBuffer('float32', chunk);
+        } else if (chunk instanceof Int16Array) {
+          audioinput._releaseBuffer('int16', chunk);
+        }
+      }
     }
 
     audioinput._timerGetNextAudio = setTimeout(
       audioinput._getNextToPlay,
-      audioinput._playAudio(concatenatedData) * 1000,
+      audioinput._playAudio(playbackData) * 1000,
     );
 
-    // Release the buffer after playing (playAudio is synchronous for buffer creation)
-    audioinput._releaseBuffer(bufferType, concatenatedData);
+    // Release playback buffer after synchronous buffer creation.
+    if (playbackData instanceof Float32Array) {
+      audioinput._releaseBuffer('float32', playbackData);
+    } else if (playbackData instanceof Int16Array) {
+      audioinput._releaseBuffer('int16', playbackData);
+    }
   } catch (ex) {
     audioinput._audioInputErrorEvent('audioinput._getNextToPlay ex: ' + ex);
   }
@@ -650,19 +740,18 @@ audioinput._playAudio = function (data) {
           data.length / audioinput._cfg.channels,
           audioinput._cfg.sampleRate,
         ),
-        chdata = [],
         index = 0;
 
       if (audioinput._cfg.channels > 1) {
+        var channelCount = audioinput._cfg.channels;
+        var frameCount = data.length / channelCount;
         for (var i = 0; i < audioinput._cfg.channels; i++) {
-          chdata = [];
-          index = 0;
-          while (index < data.length) {
-            chdata.push(data[index + i]);
-            index += parseInt(audioinput._cfg.channels);
+          var channelData = audioBuffer.getChannelData(i);
+          index = i;
+          for (var frame = 0; frame < frameCount; frame++) {
+            channelData[frame] = data[index];
+            index += channelCount;
           }
-
-          audioBuffer.getChannelData(i).set(new Float32Array(chdata));
         }
       } else {
         audioBuffer.getChannelData(0).set(data);
@@ -717,6 +806,10 @@ audioinput._initWebAudio = function (audioCtxFromCfg) {
  * @private
  */
 audioinput._enqueueAudioData = function (data) {
+  if (!audioinput._audioDataQueue) {
+    audioinput._audioDataQueue = [];
+    audioinput._audioDataReadIndex = 0;
+  }
   audioinput._audioDataQueue.push(data);
 };
 
@@ -727,7 +820,29 @@ audioinput._enqueueAudioData = function (data) {
  * @private
  */
 audioinput._dequeueAudioData = function () {
-  return audioinput._audioDataQueue.shift();
+  if (!audioinput._audioDataQueue) return null;
+  if (audioinput._audioDataReadIndex >= audioinput._audioDataQueue.length)
+    return null;
+
+  var value = audioinput._audioDataQueue[audioinput._audioDataReadIndex++];
+
+  // Compact periodically to avoid unbounded array growth while preserving O(1) dequeue.
+  if (
+    audioinput._audioDataReadIndex > 128 &&
+    audioinput._audioDataReadIndex * 2 >= audioinput._audioDataQueue.length
+  ) {
+    audioinput._audioDataQueue = audioinput._audioDataQueue.slice(
+      audioinput._audioDataReadIndex,
+    );
+    audioinput._audioDataReadIndex = 0;
+  }
+
+  return value;
+};
+
+audioinput._getAudioDataQueueLength = function () {
+  if (!audioinput._audioDataQueue) return 0;
+  return audioinput._audioDataQueue.length - audioinput._audioDataReadIndex;
 };
 
 /**

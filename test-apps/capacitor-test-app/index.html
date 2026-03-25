@@ -173,6 +173,77 @@
         margin: 15px 0;
       }
 
+      .benchmark-panel {
+        margin: 20px 0;
+        padding: 16px;
+        border-radius: 8px;
+        border: 1px solid #dfe3e8;
+        background: #fbfcff;
+      }
+
+      .benchmark-title {
+        font-size: 16px;
+        color: #333;
+        margin-bottom: 10px;
+        font-weight: 600;
+      }
+
+      .benchmark-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .benchmark-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .benchmark-field label {
+        font-size: 12px;
+        color: #555;
+      }
+
+      .benchmark-field input,
+      .benchmark-field select {
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        padding: 8px;
+        font-size: 14px;
+        background: #fff;
+      }
+
+      .benchmark-check {
+        align-items: center;
+        flex-direction: row;
+        margin-top: 8px;
+      }
+
+      .benchmark-check label {
+        margin-left: 6px;
+      }
+
+      .benchmark-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .benchmark-output {
+        margin-top: 12px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        padding: 10px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        line-height: 1.5;
+        min-height: 80px;
+      }
+
       .stat-box {
         background: #f8f9fa;
         padding: 15px;
@@ -238,6 +309,61 @@
         <div class="stat-box">
           <div class="stat-label">Recording Duration</div>
           <div class="stat-value" id="duration">0.0s</div>
+        </div>
+      </div>
+
+      <div class="benchmark-panel">
+        <div class="benchmark-title">On-Device Benchmark</div>
+        <div class="benchmark-grid">
+          <div class="benchmark-field">
+            <label for="benchSampleRate">Sample Rate</label>
+            <select id="benchSampleRate">
+              <option value="16000">16000 Hz</option>
+              <option value="22050">22050 Hz</option>
+              <option value="44100" selected>44100 Hz</option>
+              <option value="48000">48000 Hz</option>
+            </select>
+          </div>
+          <div class="benchmark-field">
+            <label for="benchBufferSize">Buffer Size</label>
+            <select id="benchBufferSize">
+              <option value="1024">1024</option>
+              <option value="2048">2048</option>
+              <option value="4096" selected>4096</option>
+              <option value="8192">8192</option>
+            </select>
+          </div>
+          <div class="benchmark-field">
+            <label for="benchChannels">Channels</label>
+            <select id="benchChannels">
+              <option value="1" selected>Mono (1)</option>
+              <option value="2">Stereo (2)</option>
+            </select>
+          </div>
+          <div class="benchmark-field">
+            <label for="benchDuration">Duration (seconds)</label>
+            <input id="benchDuration" type="number" min="3" max="120" value="12" />
+          </div>
+        </div>
+        <div class="benchmark-field benchmark-check">
+          <input id="benchNormalize" type="checkbox" checked />
+          <label for="benchNormalize">Normalize samples</label>
+        </div>
+        <div class="benchmark-actions">
+          <button id="benchmarkStartBtn" onclick="runBenchmark()">
+            🚀 Run Benchmark
+          </button>
+          <button
+            id="benchmarkStopBtn"
+            class="stop"
+            onclick="stopBenchmark()"
+            disabled
+          >
+            ⏹ Stop Benchmark
+          </button>
+        </div>
+        <div id="benchmarkOutput" class="benchmark-output">
+No benchmark results yet.
         </div>
       </div>
 

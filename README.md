@@ -1,34 +1,53 @@
 # cordova-plugin-audioinput
 
-Audio input capture plugin for **Cordova** and **Capacitor** - Real-time microphone access with streaming and file recording support.
+[![npm version](https://img.shields.io/npm/v/cordova-plugin-audioinput?logo=npm)](https://www.npmjs.com/package/cordova-plugin-audioinput)
+[![npm downloads](https://img.shields.io/npm/dm/cordova-plugin-audioinput?logo=npm)](https://www.npmjs.com/package/cordova-plugin-audioinput)
+[![license](https://img.shields.io/npm/l/cordova-plugin-audioinput)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/edimuj/cordova-plugin-audioinput?style=social)](https://github.com/edimuj/cordova-plugin-audioinput)
 
-This plugin enables audio capture from the device microphone, forwarding raw audio data in (near) real-time to the web layer of your application. It provides similar functionality to `Navigator.getUserMedia()` with broader platform support.
+Real-time microphone capture for **Cordova** and **Capacitor** with a single package.
 
-**🎉 Version 2.0** now supports both **Cordova** and **Capacitor** from a single codebase!
+Use this plugin when you need low-latency PCM chunks in JavaScript (streaming, VAD, waveform analysis, custom DSP) and when `MediaRecorder` is too high-level or too delayed.
 
-## ✨ Features
+## Why This Plugin Exists
 
-- **Real-time audio streaming** - Get PCM audio data as it's captured
-- **Web Audio API integration** - Use as an AudioNode in your audio processing chain
-- **File recording** - Save directly to WAV files
-- **Cross-platform** - Android, iOS, and browser support
-- **Dual ecosystem** - Works with both Cordova and Capacitor
-- **TypeScript support** - Full type definitions included
-- **Optimized performance** - Buffer pooling and efficient data transfer
-- **Flexible configuration** - Multiple sample rates, formats, and audio sources
+Mobile apps often need raw, continuous microphone frames, not just encoded audio blobs.
 
-## 📦 Installation
+This plugin gives you:
+- low-latency PCM chunk streaming to JS
+- file recording support (WAV)
+- one package for Cordova + Capacitor
+- Android, iOS, and web implementations
+
+## Features
+
+- Real-time PCM streaming (`audioData` / `audioinput` events)
+- Cordova native bridge now streams binary PCM payloads (ArrayBuffer) for lower bridge overhead
+- Optional normalization (`-1.0 .. 1.0`) for easier JS DSP
+- Optional WAV recording via `fileUrl`
+- Microphone permission helpers
+- TypeScript definitions for Capacitor
+- Cordova Web Audio integration (`streamToWebAudio`, `connect`, `disconnect`)
+
+## Platform Support
+
+| Platform | Cordova | Capacitor |
+| --- | --- | --- |
+| Android | ✅ | ✅ |
+| iOS | ✅ | ✅ |
+| Browser | ✅ | ✅ |
+
+Notes:
+- Capacitor Android build config defaults to `minSdkVersion 24`.
+- Capacitor iOS podspec uses deployment target `14.0`.
+- Web support is intended for development/lightweight browser use-cases.
+
+## Installation
 
 ### Cordova
 
-From the Cordova Plugin Repository:
 ```bash
 cordova plugin add cordova-plugin-audioinput
-```
-
-Or from GitHub:
-```bash
-cordova plugin add https://github.com/edimuj/cordova-plugin-audioinput.git
 ```
 
 ### Capacitor
@@ -38,570 +57,226 @@ npm install cordova-plugin-audioinput
 npx cap sync
 ```
 
-## 🎯 Supported Platforms
+## iOS Permission String
 
-| Platform | Cordova | Capacitor | Notes |
-|----------|---------|-----------|-------|
-| Android  | ✅      | ✅        | API 22+ |
-| iOS      | ✅      | ✅        | iOS 13+ |
-| Browser  | ✅      | ✅        | Web Audio API |
+Ensure `NSMicrophoneUsageDescription` exists in your app `Info.plist`.
 
-## 🚀 Quick Start
+Example:
 
-### Capacitor (TypeScript)
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>This app needs microphone access to capture audio.</string>
+```
 
-```typescript
+## Quick Start (Capacitor)
+
+```ts
 import { AudioInput } from 'cordova-plugin-audioinput';
 
-// Initialize with configuration
 await AudioInput.initialize({
   sampleRate: 44100,
   bufferSize: 16384,
   channels: 1,
   format: 'PCM_16BIT',
-  normalize: true
+  normalize: true,
 });
 
-// Check/request microphone permission
-const { granted } = await AudioInput.checkMicrophonePermission();
-if (!granted) {
-  await AudioInput.getMicrophonePermission();
+const permission = await AudioInput.checkMicrophonePermission();
+if (!permission.granted) {
+  const requested = await AudioInput.getMicrophonePermission();
+  if (!requested.granted) throw new Error('Microphone permission denied');
 }
 
-// Listen for audio data
-AudioInput.addListener('audioData', (event) => {
-  console.log(`Received ${event.data.length} samples`);
-  // Process audio data...
+const audioDataHandle = await AudioInput.addListener('audioData', event => {
+  // event.data is number[]
+  console.log('samples:', event.data.length);
 });
 
-// Start capturing (uses options from initialize)
+const errorHandle = await AudioInput.addListener('audioError', event => {
+  console.error('audio error:', event.message);
+});
+
 await AudioInput.start();
 
-// Stop capturing
+// ... later
+await AudioInput.stop();
+await audioDataHandle.remove();
+await errorHandle.remove();
+```
+
+### Capacitor File Recording
+
+```ts
+import { AudioInput } from 'cordova-plugin-audioinput';
+
+await AudioInput.addListener('audioInputFinished', event => {
+  console.log('WAV file:', event.fileUrl);
+});
+
+await AudioInput.start({
+  sampleRate: 16000,
+  channels: 1,
+  format: 'PCM_16BIT',
+  fileUrl: 'file:///path/to/recording.wav',
+});
+
+// stop() resolves when capture stops.
+// fileUrl is delivered via audioInputFinished event.
 await AudioInput.stop();
 ```
 
-### Cordova (JavaScript)
+## Quick Start (Cordova)
 
-```javascript
-// Check permission first
-audioinput.checkMicrophonePermission(function(hasPermission) {
+```js
+function onAudioInput(event) {
+  console.log('samples:', event.data.length);
+}
+
+function onAudioInputError(event) {
+  console.error('audio error:', event.message);
+}
+
+window.addEventListener('audioinput', onAudioInput, false);
+window.addEventListener('audioinputerror', onAudioInputError, false);
+
+audioinput.checkMicrophonePermission(function (hasPermission) {
   if (hasPermission) {
     startCapture();
-  } else {
-    audioinput.getMicrophonePermission(function(granted) {
-      if (granted) {
-        startCapture();
-      }
-    });
+    return;
   }
+
+  audioinput.getMicrophonePermission(function (granted) {
+    if (granted) startCapture();
+  });
 });
 
 function startCapture() {
-  // Listen for audio data
-  window.addEventListener('audioinput', function(event) {
-    console.log('Received ' + event.data.length + ' samples');
-    // Process audio data...
-  });
-
-  // Start capturing
   audioinput.start({
     sampleRate: 44100,
     bufferSize: 16384,
     channels: 1,
     format: audioinput.FORMAT.PCM_16BIT,
-    normalize: true
+    normalize: true,
   });
 }
 
-// Stop capturing
-audioinput.stop();
-```
-
-## 📖 Usage Examples
-
-### Method 1: Web Audio API Integration (AudioNode)
-
-This method lets the plugin handle data conversion and provides an AudioNode for Web Audio API integration.
-
-#### Capacitor
-```typescript
-import { AudioInput } from 'cordova-plugin-audioinput';
-
-async function setupWebAudio() {
-  // Request permission
-  const { granted } = await AudioInput.getMicrophonePermission();
-  if (!granted) return;
-
-  // Start with Web Audio integration
-  // Note: For Capacitor, use the Cordova API via window.audioinput for streamToWebAudio
-  const audioinput = (window as any).audioinput;
-
-  audioinput.start({
-    streamToWebAudio: true
+function stopCapture() {
+  audioinput.stop(function (fileUrl) {
+    if (fileUrl) console.log('Saved file:', fileUrl);
   });
-
-  // Connect to speakers to hear the captured audio
-  audioinput.connect(audioinput.getAudioContext().destination);
 }
 ```
 
-#### Cordova
-```javascript
-function startCapture() {
-  audioinput.start({
-    streamToWebAudio: true
-  });
-
-  // Connect to device speakers
-  audioinput.connect(audioinput.getAudioContext().destination);
-}
-
-// Check and request permission
-audioinput.checkMicrophonePermission(function(hasPermission) {
-  if (hasPermission) {
-    startCapture();
-  } else {
-    audioinput.getMicrophonePermission(function(granted) {
-      if (granted) startCapture();
-    });
-  }
-});
-```
-
-### Method 2: Event-Based Raw Audio Data
-
-Use this method for direct access to raw audio data for custom processing.
-
-#### Capacitor
-```typescript
-import { AudioInput } from 'cordova-plugin-audioinput';
-
-async function setupRawAudio() {
-  // Request permission
-  await AudioInput.getMicrophonePermission();
-
-  // Listen for audio data
-  AudioInput.addListener('audioData', (event) => {
-    // event.data is an array of audio samples
-    processAudioData(event.data);
-  });
-
-  // Listen for errors
-  AudioInput.addListener('audioError', (event) => {
-    console.error('Audio error:', event.message);
-  });
-
-  // Initialize with options
-  await AudioInput.initialize({
-    sampleRate: 44100,
-    bufferSize: 8192,
-    channels: 1,
-    format: 'PCM_16BIT',
-    normalize: true
-  });
-
-  // Start capturing (uses options from initialize)
-  await AudioInput.start();
-}
-
-function processAudioData(samples: number[]) {
-  // Your audio processing logic here
-  console.log(`Processing ${samples.length} samples`);
-}
-
-// Stop when done
-async function stopRecording() {
-  await AudioInput.stop();
-  await AudioInput.removeAllListeners();
-}
-```
-
-#### Cordova
-```javascript
-function onAudioInput(event) {
-  // event.data is an array of audio samples
-  console.log('Audio data received: ' + event.data.length + ' samples');
-  processAudioData(event.data);
-}
-
-function onAudioInputError(error) {
-  console.error('Audio error:', JSON.stringify(error));
-}
-
-// Listen to events
-window.addEventListener('audioinput', onAudioInput, false);
-window.addEventListener('audioinputerror', onAudioInputError, false);
-
-// Start capturing
-audioinput.start({
-  sampleRate: 44100,
-  bufferSize: 8192,
-  channels: 1,
-  format: audioinput.FORMAT.PCM_16BIT,
-  normalize: true
-});
-
-// Stop capturing
-audioinput.stop();
-```
-
-### Method 3: Recording to Files
-
-Save audio directly to WAV files on the device.
-
-#### Capacitor
-```typescript
-import { AudioInput } from 'cordova-plugin-audioinput';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-
-async function recordToFile() {
-  await AudioInput.getMicrophonePermission();
-
-  // Listen for recording finished event
-  AudioInput.addListener('audioInputFinished', async (event) => {
-    console.log('Recording saved to:', event.fileUrl);
-    // File is now available at event.fileUrl
-  });
-
-  // Initialize with options
-  const fileUrl = 'file:///path/to/recording.wav';
-  await AudioInput.initialize({
-    sampleRate: 16000,
-    bufferSize: 8192,
-    channels: 1,
-    format: 'PCM_16BIT',
-    fileUrl: fileUrl
-  });
-
-  // Start recording to file
-  await AudioInput.start();
-
-  // When ready to stop
-  const result = await AudioInput.stop();
-  console.log('Stopped, file at:', result.fileUrl);
-}
-```
-
-#### Cordova (with cordova-plugin-file)
-```javascript
-// Get access to the file system
-window.requestFileSystem(window.TEMPORARY, 5*1024*1024, function(fs) {
-  fileSystem = fs;
-
-  // Initialize with file system directory
-  var captureCfg = {
-    sampleRate: 16000,
-    bufferSize: 8192,
-    channels: 1,
-    format: audioinput.FORMAT.PCM_16BIT,
-    fileUrl: cordova.file.cacheDirectory
-  };
-
-  audioinput.initialize(captureCfg, function() {
-    console.log('Initialized with file system access');
-  });
-});
-
-// Start recording to file
-var captureCfg = {
-  fileUrl: cordova.file.cacheDirectory + 'recording.wav'
-};
-
-audioinput.start(captureCfg);
-
-// Stop and get file URL
-audioinput.stop(function(fileUrl) {
-  console.log('Recording saved to:', fileUrl);
-
-  // Read the file
-  window.resolveLocalFileSystemURL(fileUrl, function(fileEntry) {
-    fileEntry.file(function(file) {
-      var reader = new FileReader();
-      reader.onloadend = function() {
-        var blob = new Blob([new Uint8Array(this.result)], { type: 'audio/wav' });
-        // Use the blob...
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  });
-});
-```
-
-## ⚙️ Configuration Options
-
-### AudioInputOptions (Capacitor) / captureCfg (Cordova)
-
-```typescript
-interface AudioInputOptions {
-  // Sample rate in Hz
-  sampleRate?: number;          // Default: 44100
-                                // Available: 8000, 11025, 16000, 22050, 32000, 44100, 48000
-
-  // Buffer size in bytes (should be power of 2, <= 16384)
-  bufferSize?: number;          // Default: 16384
-
-  // Number of channels
-  channels?: number;            // Default: 1 (Mono)
-                                // 1 = Mono, 2 = Stereo
-
-  // Audio format
-  format?: 'PCM_16BIT' | 'PCM_8BIT';  // Default: 'PCM_16BIT'
-
-  // Normalize audio data to -1.0 to 1.0 range
-  normalize?: boolean;          // Default: true
-
-  // Normalization factor (audio divided by this value)
-  normalizationFactor?: number; // Default: 32767.0
-
-  // Audio source type
-  audioSourceType?: number;     // Default: 0 (DEFAULT)
-                                // 0 = DEFAULT
-                                // 1 = MIC (Android only)
-                                // 5 = CAMCORDER
-                                // 6 = VOICE_RECOGNITION (Android only)
-                                // 7 = VOICE_COMMUNICATION
-                                // 9 = UNPROCESSED
-
-  // File URL for saving (when set, no data events are fired)
-  fileUrl?: string;             // Example: 'file:///path/to/file.wav'
-
-  // Cordova-specific options (use via window.audioinput)
-  streamToWebAudio?: boolean;   // Let plugin handle Web Audio conversion
-  audioContext?: AudioContext;  // Provide your own AudioContext
-  concatenateMaxChunks?: number;// Chunks to merge (lower = lower latency)
-}
-```
-
-### Helper Constants
-
-#### Capacitor (TypeScript)
-```typescript
-import { SampleRate, AudioSourceType } from 'cordova-plugin-audioinput';
-
-const config = {
-  sampleRate: SampleRate.CD_AUDIO_44100Hz,
-  audioSourceType: AudioSourceType.VOICE_COMMUNICATION
-};
-```
-
-#### Cordova (JavaScript)
-```javascript
-var config = {
-  sampleRate: audioinput.SAMPLERATE.CD_AUDIO_44100Hz,
-  channels: audioinput.CHANNELS.MONO,
-  format: audioinput.FORMAT.PCM_16BIT,
-  audioSourceType: audioinput.AUDIOSOURCE_TYPE.VOICE_COMMUNICATION
-};
-```
-
-Available constants:
-- `SAMPLERATE`: `TELEPHONE_8000Hz`, `CD_QUARTER_11025Hz`, `VOIP_16000Hz`, `CD_HALF_22050Hz`, `MINI_DV_32000Hz`, `CD_AUDIO_44100Hz`, `DVD_AUDIO_48000Hz`
-- `CHANNELS`: `MONO`, `STEREO`
-- `FORMAT`: `PCM_16BIT`, `PCM_8BIT`
-- `AUDIOSOURCE_TYPE`: `DEFAULT`, `MIC`, `CAMCORDER`, `VOICE_RECOGNITION`, `VOICE_COMMUNICATION`, `UNPROCESSED`
-
-## 📚 API Reference
-
-### Capacitor API
-
-```typescript
-import { AudioInput } from 'cordova-plugin-audioinput';
-
-// Initialize (optional - can also configure in start())
-await AudioInput.initialize(options: AudioInputOptions): Promise<void>
-
-// Check microphone permission (doesn't prompt user)
-await AudioInput.checkMicrophonePermission(): Promise<{ granted: boolean }>
-
-// Request microphone permission (prompts user if needed)
-await AudioInput.getMicrophonePermission(): Promise<{ granted: boolean }>
-
-// Start audio capture
-await AudioInput.start(options?: AudioInputOptions): Promise<void>
-
-// Stop audio capture
-await AudioInput.stop(): Promise<{ fileUrl?: string }>
-
-// Add event listener
-AudioInput.addListener(
-  'audioData' | 'audioError' | 'audioInputFinished',
-  callback
-): PluginListenerHandle
-
-// Remove all listeners
-await AudioInput.removeAllListeners(): Promise<void>
-```
-
-### Cordova API
-
-```javascript
-// Initialize (optional)
-audioinput.initialize(captureCfg, onComplete)
-
-// Check microphone permission
-audioinput.checkMicrophonePermission(callback)
-
-// Request microphone permission
-audioinput.getMicrophonePermission(callback)
-
-// Start capturing
-audioinput.start(captureCfg)
-
-// Stop capturing
-audioinput.stop(onStopped)
-
-// Check if capturing
-audioinput.isCapturing(): boolean
-
-// Get current configuration
-audioinput.getCfg(): object
-
-// Web Audio API methods (when streamToWebAudio: true)
-audioinput.connect(audioNode)
-audioinput.disconnect()
-audioinput.getAudioContext(): AudioContext
-```
+## API (Capacitor)
+
+### Methods
+
+- `initialize(options: AudioInputOptions): Promise<void>`
+- `checkMicrophonePermission(): Promise<{ granted: boolean }>`
+- `getMicrophonePermission(): Promise<{ granted: boolean }>`
+- `start(options?: AudioInputOptions): Promise<void>`
+- `stop(): Promise<{ fileUrl?: string }>`
+- `isCapturing(): Promise<{ capturing: boolean }>`
+- `getCfg(): Promise<AudioInputOptions>`
+- `removeAllListeners(): Promise<void>`
 
 ### Events
 
-#### Capacitor Events
-- `audioData` - Fired when audio data is available (if not recording to file)
-- `audioError` - Fired when an error occurs
-- `audioInputFinished` - Fired when file recording completes
+- `audioData` → `{ data: number[], sampleRate?, channels?, format?, timestamp? }`
+- `audioError` → `{ message: string, code?: string }`
+- `audioInputFinished` → `{ fileUrl: string, timestamp?: number }`
+- `stateChange` → `{ state: 'idle' | 'capturing' | 'stopped' | 'error', message?, timestamp? }`
 
-#### Cordova Events
-- `audioinput` - Fired when audio data is available (if not recording to file)
-- `audioinputerror` - Fired when an error occurs
-- `audioinputfinished` - Fired when file recording completes (has `file` property)
+## API (Cordova)
 
-## 🔧 Advanced Usage
+### Methods
 
-### Custom Audio Processing Chain (Web Audio API)
+- `audioinput.initialize(captureCfg, onComplete)`
+- `audioinput.checkMicrophonePermission(callback)`
+- `audioinput.getMicrophonePermission(callback)`
+- `audioinput.start(captureCfg)`
+- `audioinput.stop(onStopped)`
+- `audioinput.isCapturing()`
+- `audioinput.getCfg()`
+- `audioinput.connect(audioNode)`
+- `audioinput.disconnect()`
+- `audioinput.getAudioContext()`
 
-```javascript
-// Cordova example - works in both platforms via window.audioinput
-var audioContext = new AudioContext();
+### Events
 
-audioinput.start({
-  streamToWebAudio: true,
-  audioContext: audioContext
-});
+- `audioinput` → `{ data, sampleRate?, channels?, format?, timestamp? }`
+- `audioinputerror` → `{ message }`
+- `audioinputfinished` → `{ file, timestamp? }`
+- `audioinputstatechange` → `{ state, message?, timestamp? }`
 
-// Create a custom processing chain
-var analyser = audioContext.createAnalyser();
-var filter = audioContext.createBiquadFilter();
+## Configuration (`AudioInputOptions` / `captureCfg`)
 
-filter.type = 'lowpass';
-filter.frequency.value = 1000;
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sampleRate` | `number` | `44100` | Common values: `8000`, `16000`, `22050`, `44100`, `48000` |
+| `bufferSize` | `number` | `16384` | Power-of-two is recommended |
+| `channels` | `1 \| 2` | `1` | Mono or stereo |
+| `format` | `'PCM_16BIT' \| 'PCM_8BIT'` | `'PCM_16BIT'` | `PCM_16BIT` recommended |
+| `normalize` | `boolean` | `true` | Normalize to float range `-1..1` |
+| `normalizationFactor` | `number` | `32767.0` | Used when `normalize=true` |
+| `audioSourceType` | `number` | `0` | See source constants |
+| `fileUrl` | `string` | `undefined` | Record to WAV file instead of streaming events |
 
-// Connect: mic → filter → analyser → speakers
-audioinput.connect(filter);
-filter.connect(analyser);
-analyser.connect(audioContext.destination);
+Cordova-only additions:
 
-// Visualize audio
-function visualize() {
-  var dataArray = new Uint8Array(analyser.frequencyBinCount);
-  analyser.getByteFrequencyData(dataArray);
-  // Draw visualization...
-  requestAnimationFrame(visualize);
-}
-visualize();
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `streamToWebAudio` | `boolean` | `false` | Pipe captured audio through Web Audio API |
+| `audioContext` | `AudioContext` | auto | Provide your own context |
+| `concatenateMaxChunks` | `number` | `10` | Queue merge tuning |
+
+## Constants
+
+### Capacitor
+
+```ts
+import { SampleRate, AudioSourceType } from 'cordova-plugin-audioinput';
 ```
 
-### Voice Activity Detection
+### Cordova
 
-```typescript
-// Capacitor example
-import { AudioInput } from 'cordova-plugin-audioinput';
-
-let silenceThreshold = 0.01;  // Adjust based on your needs
-let isSpeaking = false;
-
-AudioInput.addListener('audioData', (event) => {
-  // Calculate RMS (Root Mean Square) for volume detection
-  const samples = event.data;
-  let sum = 0;
-  for (let i = 0; i < samples.length; i++) {
-    sum += samples[i] * samples[i];
-  }
-  const rms = Math.sqrt(sum / samples.length);
-
-  // Detect speech
-  if (rms > silenceThreshold && !isSpeaking) {
-    console.log('Speech started');
-    isSpeaking = true;
-  } else if (rms <= silenceThreshold && isSpeaking) {
-    console.log('Speech stopped');
-    isSpeaking = false;
-  }
-});
-
-await AudioInput.initialize({ normalize: true });
-await AudioInput.start();
+```js
+audioinput.SAMPLERATE
+audioinput.CHANNELS
+audioinput.FORMAT
+audioinput.AUDIOSOURCE_TYPE
 ```
 
-## 💾 Demo Apps
+## Performance Tips
 
-- [app-audioinput-demo](https://github.com/edimuj/app-audioinput-demo) - Cordova demo app
-- The `demo` folder contains usage examples:
-  - `webaudio-demo` - Web Audio API AudioNode integration
-  - `events-demo` - Event-based raw audio data handling
-  - `wav-demo` - WAV encoding and playback
-  - `file-demo` - File saving (requires cordova-plugin-file)
+- Prefer `PCM_16BIT` unless you have a hard requirement for `PCM_8BIT`.
+- Start with mono (`channels: 1`) and `sampleRate: 16000` for speech workloads.
+- Use larger `bufferSize` for lower CPU usage and smaller `bufferSize` for lower latency.
+- If you only need files, set `fileUrl` and skip streaming processing.
+- Run `npm run bench:js` for a quick synthetic JS hot-path benchmark.
 
-## 🆕 What's New in v2.0
+## Known Limitations
 
-- ✅ **Capacitor support** - Full Capacitor plugin implementation
-- ✅ **TypeScript** - Complete type definitions for Capacitor
-- ✅ **Modern languages** - Kotlin (Android) and Swift (iOS) wrappers
-- ✅ **Promise-based API** - Async/await support in Capacitor
-- ✅ **Performance optimizations** - Buffer pooling, efficient Base64 encoding
-- ✅ **Bug fixes** - Multiple critical bugs fixed
-- ✅ **100% backward compatible** - Existing Cordova apps work unchanged
+- Device support for sample-rate/channel combinations varies.
+- Bluetooth microphone routing behavior varies by OS/device.
+- `streamToWebAudio` is a Cordova API surface (via `window.audioinput`).
+- Web implementation does not persist `fileUrl` recordings (it emits an `audioError` warning and continues streaming).
 
-See [CHANGELOG.md](CHANGELOG.md) for full details.
+## Demo / Test Apps
 
-## 🐛 Known Issues & Limitations
+- [app-audioinput-demo](https://github.com/edimuj/app-audioinput-demo)
+- Local harnesses in [`test-apps`](test-apps):
+  - `test-apps/cordova-test-app`
+  - `test-apps/capacitor-test-app`
 
-- Not all audio configuration combinations are supported by all devices
-- Default settings work on most devices
-- Bluetooth microphone support varies by device
-- File recording always produces WAV format
+## Changelog
 
-## 🤝 Contributing
+See [CHANGELOG.md](CHANGELOG.md).
 
-Contributions are welcome! Please ensure changes don't break backward compatibility.
+## Contributing
 
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+PRs are welcome. Please keep backward compatibility for existing Cordova integrations.
 
-## 💖 Support This Project
+## License
 
-If you find this plugin useful, please:
-- ⭐ Star the project on GitHub
-- 📢 Share it with others
-- 💰 [Donate via PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R9WGMBB2BMS34)
-
-Your support helps keep this project maintained and improved!
-
-## 📜 License
-
-[MIT License](https://github.com/edimuj/cordova-plugin-audioinput/blob/master/LICENSE)
-
-## 👏 Credits
-
-- **Created by**: Edin Mujkanovic
-- **Contributors**: [All contributors](https://github.com/edimuj/cordova-plugin-audioinput/graphs/contributors)
-- **v2.0 Capacitor support**: Enhanced with modern architecture and optimizations
-
-## 🔗 Links
-
-- [GitHub Repository](https://github.com/edimuj/cordova-plugin-audioinput)
-- [npm Package](https://www.npmjs.com/package/cordova-plugin-audioinput)
-- [Issue Tracker](https://github.com/edimuj/cordova-plugin-audioinput/issues)
-- [Changelog](CHANGELOG.md)
+MIT — see [LICENSE](LICENSE).

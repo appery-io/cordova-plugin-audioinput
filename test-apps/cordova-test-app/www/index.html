@@ -124,6 +124,72 @@
         font-weight: bold;
         color: #333;
       }
+      .benchmark-panel {
+        margin: 20px 0;
+        padding: 14px;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        background: #fafcff;
+      }
+      .benchmark-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 10px;
+      }
+      .benchmark-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .benchmark-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .benchmark-field label {
+        font-size: 12px;
+        color: #555;
+      }
+      .benchmark-field input,
+      .benchmark-field select {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 14px;
+      }
+      .benchmark-check {
+        align-items: center;
+        flex-direction: row;
+        margin-bottom: 10px;
+      }
+      .benchmark-check label {
+        margin-left: 6px;
+      }
+      .benchmark-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .benchmark-stop-btn {
+        background: #dc3545;
+      }
+      .benchmark-stop-btn:active:not(:disabled) {
+        background: #bd2130;
+      }
+      .benchmark-output {
+        margin-top: 10px;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+        background: #f8f9fa;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        min-height: 80px;
+        line-height: 1.5;
+      }
     </style>
   </head>
   <body>
@@ -169,17 +235,108 @@
         </div>
       </div>
 
+      <div class="benchmark-panel">
+        <div class="benchmark-title">On-Device Benchmark</div>
+        <div class="benchmark-grid">
+          <div class="benchmark-field">
+            <label for="benchSampleRate">Sample Rate</label>
+            <select id="benchSampleRate">
+              <option value="16000">16000 Hz</option>
+              <option value="22050">22050 Hz</option>
+              <option value="44100" selected>44100 Hz</option>
+              <option value="48000">48000 Hz</option>
+            </select>
+          </div>
+          <div class="benchmark-field">
+            <label for="benchBufferSize">Buffer Size</label>
+            <select id="benchBufferSize">
+              <option value="1024">1024</option>
+              <option value="2048">2048</option>
+              <option value="4096" selected>4096</option>
+              <option value="8192">8192</option>
+            </select>
+          </div>
+          <div class="benchmark-field">
+            <label for="benchChannels">Channels</label>
+            <select id="benchChannels">
+              <option value="1" selected>Mono (1)</option>
+              <option value="2">Stereo (2)</option>
+            </select>
+          </div>
+          <div class="benchmark-field">
+            <label for="benchDuration">Duration (seconds)</label>
+            <input id="benchDuration" type="number" min="3" max="120" value="12" />
+          </div>
+        </div>
+        <div class="benchmark-field benchmark-check">
+          <input id="benchNormalize" type="checkbox" checked />
+          <label for="benchNormalize">Normalize samples</label>
+        </div>
+        <div class="benchmark-actions">
+          <button id="benchmarkStartBtn" onclick="runBenchmark()">
+            🚀 Run Benchmark
+          </button>
+          <button
+            id="benchmarkStopBtn"
+            class="benchmark-stop-btn"
+            onclick="stopBenchmark()"
+            disabled
+          >
+            ⏹ Stop Benchmark
+          </button>
+        </div>
+        <div id="benchmarkOutput" class="benchmark-output">
+No benchmark results yet.
+        </div>
+      </div>
+
       <div id="status">Waiting for device ready...</div>
     </div>
 
     <script type="text/javascript" src="cordova.js"></script>
     <script type="text/javascript">
+      const MANUAL_CAPTURE_CFG = {
+        sampleRate: 44100,
+        bufferSize: 4096,
+        channels: 1,
+        format: 'PCM_16BIT',
+        normalize: true,
+        normalizationFactor: 32767.0,
+      };
+
       let captureStarted = false;
+      let activeMode = null;
       let audioDataCount = 0;
       let audioBuffer = [];
       let audioContext = null;
-      let sampleRate = 44100;
+      let sampleRate = MANUAL_CAPTURE_CFG.sampleRate;
       let startTime = null;
+      let benchmarkRunId = 0;
+      let benchmarkState = emptyBenchmarkState();
+
+      function emptyBenchmarkState() {
+        return {
+          runId: 0,
+          running: false,
+          config: null,
+          durationSec: 0,
+          timerId: null,
+          totalChunks: 0,
+          totalSamples: 0,
+          firstChunkAtMs: 0,
+          lastChunkAtMs: 0,
+          intervalsMs: [],
+          handlerDurationsMs: [],
+        };
+      }
+
+      function nowMs() {
+        if (window.performance && typeof window.performance.now === 'function') {
+          return window.performance.now();
+        }
+
+        return Date.now();
+      }
 
       function log(message) {
         const status = document.getElementById('status');
@@ -190,24 +347,35 @@
       }
 
       function updateButtons() {
+        const manualRunning = captureStarted && activeMode === 'manual';
         document.getElementById('startBtn').disabled = captureStarted;
-        document.getElementById('stopBtn').disabled = !captureStarted;
-        document.getElementById('playBtn').disabled = audioBuffer.length === 0;
+        document.getElementById('stopBtn').disabled = !manualRunning;
+        document.getElementById('playBtn').disabled =
+          captureStarted || audioBuffer.length === 0;
+        document.getElementById('benchmarkStartBtn').disabled = captureStarted;
+        document.getElementById('benchmarkStopBtn').disabled =
+          !benchmarkState.running;
       }
 
       function updateStats() {
         document.getElementById('chunkCount').textContent = audioDataCount;
-        if (startTime && captureStarted) {
+        if (captureStarted && startTime) {
           const duration = (Date.now() - startTime) / 1000;
           document.getElementById('duration').textContent =
             duration.toFixed(1) + 's';
         }
       }
 
-      function updateLevel(data) {
-        if (!data || data.length === 0) return;
+      function resetLevelMeter() {
+        document.getElementById('levelFill').style.width = '0%';
+        document.getElementById('levelValue').textContent = '0%';
+      }
 
-        // Calculate RMS level
+      function updateLevel(data) {
+        if (!data || data.length === 0) {
+          return;
+        }
+
         let sum = 0;
         for (let i = 0; i < data.length; i++) {
           sum += data[i] * data[i];
@@ -219,6 +387,278 @@
         document.getElementById('levelValue').textContent = level + '%';
       }
 
+      function avg(values) {
+        if (!values.length) {
+          return 0;
+        }
+
+        return values.reduce((acc, value) => acc + value, 0) / values.length;
+      }
+
+      function stdDev(values) {
+        if (values.length < 2) {
+          return 0;
+        }
+
+        const mean = avg(values);
+        const variance =
+          values.reduce((acc, value) => acc + (value - mean) ** 2, 0) /
+          values.length;
+        return Math.sqrt(variance);
+      }
+
+      function percentile(values, p) {
+        if (!values.length) {
+          return 0;
+        }
+
+        const sorted = [...values].sort((a, b) => a - b);
+        const pos = ((p / 100) * (sorted.length - 1));
+        const lower = Math.floor(pos);
+        const upper = Math.ceil(pos);
+        if (lower === upper) {
+          return sorted[lower];
+        }
+
+        const weight = pos - lower;
+        return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+      }
+
+      function expectedChunkMs(captureCfg) {
+        return (captureCfg.bufferSize / captureCfg.sampleRate) * 1000;
+      }
+
+      function renderBenchmarkOutput(text) {
+        document.getElementById('benchmarkOutput').textContent = text;
+      }
+
+      function chunkLength(data) {
+        return data && typeof data.length === 'number' ? data.length : 0;
+      }
+
+      function extractAudioData(evt) {
+        if (!evt) {
+          return null;
+        }
+
+        let payload = evt.data;
+        if (!payload && evt.detail && evt.detail.data) {
+          payload = evt.detail.data;
+        }
+
+        if (!payload) {
+          return null;
+        }
+
+        if (Array.isArray(payload) || ArrayBuffer.isView(payload)) {
+          return payload;
+        }
+
+        if (payload instanceof ArrayBuffer) {
+          return new Float32Array(payload);
+        }
+
+        return null;
+      }
+
+      function parseBenchmarkCfg() {
+        const sampleRate = Number(
+          document.getElementById('benchSampleRate').value,
+        );
+        const bufferSize = Number(
+          document.getElementById('benchBufferSize').value,
+        );
+        const channels = Number(document.getElementById('benchChannels').value);
+        const durationSec = Number(
+          document.getElementById('benchDuration').value,
+        );
+        const normalize = document.getElementById('benchNormalize').checked;
+
+        if (
+          !Number.isFinite(sampleRate) ||
+          !Number.isFinite(bufferSize) ||
+          !Number.isFinite(channels) ||
+          !Number.isFinite(durationSec) ||
+          sampleRate <= 0 ||
+          bufferSize <= 0 ||
+          (channels !== 1 && channels !== 2)
+        ) {
+          throw new Error('Invalid benchmark capture settings');
+        }
+
+        if (durationSec < 3 || durationSec > 120) {
+          throw new Error('Benchmark duration must be between 3 and 120 seconds');
+        }
+
+        return {
+          durationSec,
+          captureCfg: {
+            sampleRate,
+            bufferSize,
+            channels,
+            format: 'PCM_16BIT',
+            normalize,
+            normalizationFactor: 32767.0,
+          },
+        };
+      }
+
+      function renderBenchmarkRunning() {
+        const cfg = benchmarkState.config;
+        const expectedMs = expectedChunkMs(cfg);
+        const observedMs = Math.max(
+          benchmarkState.lastChunkAtMs - benchmarkState.firstChunkAtMs,
+          0,
+        );
+        const intervalP95 = percentile(benchmarkState.intervalsMs, 95);
+        const jitterP95 = percentile(
+          benchmarkState.intervalsMs.map(value => Math.abs(value - expectedMs)),
+          95,
+        );
+
+        const lines = [
+          `Running benchmark #${benchmarkState.runId}`,
+          `Config: ${cfg.sampleRate}Hz, buffer ${cfg.bufferSize}, channels ${cfg.channels}, normalize=${cfg.normalize}`,
+          `Chunks: ${benchmarkState.totalChunks}, samples: ${benchmarkState.totalSamples}`,
+          `Elapsed: ${(observedMs / 1000).toFixed(2)}s / target ${benchmarkState.durationSec}s`,
+          `Expected chunk interval: ${expectedMs.toFixed(2)}ms`,
+        ];
+
+        if (benchmarkState.intervalsMs.length) {
+          lines.push(
+            `Observed interval avg/p95: ${avg(benchmarkState.intervalsMs).toFixed(2)}ms / ${intervalP95.toFixed(2)}ms`,
+          );
+          lines.push(`p95 absolute jitter: ${jitterP95.toFixed(2)}ms`);
+        }
+
+        renderBenchmarkOutput(lines.join('\n'));
+      }
+
+      function buildBenchmarkResult() {
+        const cfg = benchmarkState.config;
+        const expectedMs = expectedChunkMs(cfg);
+        const observedMs = Math.max(
+          benchmarkState.lastChunkAtMs - benchmarkState.firstChunkAtMs,
+          0,
+        );
+        const expectedFromSamplesMs =
+          (benchmarkState.totalSamples / cfg.sampleRate) * 1000;
+        const absJitter = benchmarkState.intervalsMs.map(value =>
+          Math.abs(value - expectedMs),
+        );
+        const handlerTotalMs = benchmarkState.handlerDurationsMs.reduce(
+          (acc, value) => acc + value,
+          0,
+        );
+
+        const lateChunkThresholdMs = expectedMs * 1.5;
+        const lateChunks = benchmarkState.intervalsMs.filter(
+          value => value > lateChunkThresholdMs,
+        ).length;
+        const minIntervalMs = benchmarkState.intervalsMs.length
+          ? Math.min(...benchmarkState.intervalsMs)
+          : 0;
+        const maxIntervalMs = benchmarkState.intervalsMs.length
+          ? Math.max(...benchmarkState.intervalsMs)
+          : 0;
+
+        return {
+          runId: benchmarkState.runId,
+          platform: window.device ? window.device.platform : 'unknown',
+          recordedAt: new Date().toISOString(),
+          config: {
+            sampleRate: cfg.sampleRate,
+            bufferSize: cfg.bufferSize,
+            channels: cfg.channels,
+            normalize: cfg.normalize,
+            durationSec: benchmarkState.durationSec,
+          },
+          totals: {
+            chunks: benchmarkState.totalChunks,
+            samples: benchmarkState.totalSamples,
+            observedDurationMs: Number(observedMs.toFixed(2)),
+            expectedFromSamplesMs: Number(expectedFromSamplesMs.toFixed(2)),
+            driftMs: Number((observedMs - expectedFromSamplesMs).toFixed(2)),
+            effectiveSampleRate: Number(
+              (observedMs > 0
+                ? benchmarkState.totalSamples / (observedMs / 1000)
+                : 0
+              ).toFixed(2),
+            ),
+          },
+          intervals: {
+            expectedMs: Number(expectedMs.toFixed(2)),
+            avgMs: Number(avg(benchmarkState.intervalsMs).toFixed(2)),
+            minMs: Number(minIntervalMs.toFixed(2)),
+            maxMs: Number(maxIntervalMs.toFixed(2)),
+            p50Ms: Number(percentile(benchmarkState.intervalsMs, 50).toFixed(2)),
+            p95Ms: Number(percentile(benchmarkState.intervalsMs, 95).toFixed(2)),
+            stdDevMs: Number(stdDev(benchmarkState.intervalsMs).toFixed(2)),
+            avgJitterMs: Number(avg(absJitter).toFixed(2)),
+            p95JitterMs: Number(percentile(absJitter, 95).toFixed(2)),
+            lateChunks,
+            lateChunkThresholdMs: Number(lateChunkThresholdMs.toFixed(2)),
+          },
+          handler: {
+            avgMs: Number(avg(benchmarkState.handlerDurationsMs).toFixed(3)),
+            p95Ms: Number(
+              percentile(benchmarkState.handlerDurationsMs, 95).toFixed(3),
+            ),
+            totalMs: Number(handlerTotalMs.toFixed(3)),
+            busyRatioPct: Number(
+              (
+                observedMs > 0 ? (handlerTotalMs / observedMs) * 100 : 0
+              ).toFixed(2),
+            ),
+          },
+        };
+      }
+
+      function renderBenchmarkResult(result, reason) {
+        const summaryLines = [
+          `Benchmark #${result.runId} finished${reason ? ` (${reason})` : ''}`,
+          `Config: ${result.config.sampleRate}Hz / buffer ${result.config.bufferSize} / channels ${result.config.channels} / normalize=${result.config.normalize}`,
+          `Chunks: ${result.totals.chunks}, samples: ${result.totals.samples}`,
+          `Observed duration: ${result.totals.observedDurationMs}ms`,
+          `Effective sample rate: ${result.totals.effectiveSampleRate} samples/s`,
+          `Interval avg/p95/std: ${result.intervals.avgMs} / ${result.intervals.p95Ms} / ${result.intervals.stdDevMs} ms`,
+          `Jitter avg/p95: ${result.intervals.avgJitterMs} / ${result.intervals.p95JitterMs} ms`,
+          `Callback busy ratio: ${result.handler.busyRatioPct}%`,
+          `Drift vs expected samples: ${result.totals.driftMs}ms`,
+          '',
+          JSON.stringify(result, null, 2),
+        ];
+
+        renderBenchmarkOutput(summaryLines.join('\n'));
+      }
+
+      function startCaptureEngine(captureCfg) {
+        if (!window.audioinput) {
+          throw new Error('AudioInput plugin not found');
+        }
+
+        audioinput.start(captureCfg);
+        window.addEventListener('audioinput', onAudioInput, false);
+        window.addEventListener('audioinputerror', onAudioInputError, false);
+        captureStarted = true;
+        sampleRate = captureCfg.sampleRate;
+        startTime = Date.now();
+        updateButtons();
+      }
+
+      function stopCaptureEngine() {
+        if (window.audioinput) {
+          audioinput.stop();
+        }
+
+        window.removeEventListener('audioinput', onAudioInput, false);
+        window.removeEventListener('audioinputerror', onAudioInputError, false);
+        captureStarted = false;
+        activeMode = null;
+        startTime = null;
+        updateButtons();
+      }
+
       function getPermission() {
         log('Requesting microphone permission...');
         if (window.audioinput && audioinput.checkMicrophonePermission) {
@@ -226,27 +666,27 @@
             function (hasPermission) {
               if (hasPermission) {
                 log('✓ Permission already granted');
-              } else {
-                log('Requesting permission...');
-                audioinput.getMicrophonePermission(
-                  function (granted) {
-                    log(
-                      granted ? '✓ Permission granted' : '✗ Permission denied',
-                    );
-                  },
-                  function (error) {
-                    log('✗ Error requesting permission: ' + error);
-                  },
-                );
+                return;
               }
+
+              log('Requesting permission...');
+              audioinput.getMicrophonePermission(
+                function (granted) {
+                  log(granted ? '✓ Permission granted' : '✗ Permission denied');
+                },
+                function (error) {
+                  log('✗ Error requesting permission: ' + error);
+                },
+              );
             },
             function (error) {
               log('✗ Error checking permission: ' + error);
             },
           );
-        } else {
-          log('✗ Permission API not available');
+          return;
         }
+
+        log('✗ Permission API not available');
       }
 
       function checkMicrophonePermission() {
@@ -260,25 +700,26 @@
               log('✗ Error: ' + error);
             },
           );
-        } else {
-          log('✗ Check permission API not available');
-        }
-      }
-
-      function startCapture() {
-        log('Starting audio capture...');
-        audioDataCount = 0;
-        audioBuffer = [];
-        startTime = Date.now();
-        document.getElementById('duration').textContent = '0.0s';
-        document.getElementById('chunkCount').textContent = '0';
-
-        if (!window.audioinput) {
-          log('✗ AudioInput plugin not found!');
           return;
         }
 
-        // Initialize Web Audio API
+        log('✗ Check permission API not available');
+      }
+
+      function startCapture() {
+        if (captureStarted) {
+          log('⚠ Capture or benchmark is already running');
+          return;
+        }
+
+        log('Starting audio capture...');
+        activeMode = 'manual';
+        audioDataCount = 0;
+        audioBuffer = [];
+        document.getElementById('duration').textContent = '0.0s';
+        document.getElementById('chunkCount').textContent = '0';
+        resetLevelMeter();
+
         if (!audioContext) {
           try {
             audioContext = new (window.AudioContext ||
@@ -289,81 +730,198 @@
           }
         }
 
-        const captureCfg = {
-          sampleRate: 44100,
-          bufferSize: 4096,
-          channels: 1,
-          format: 'PCM_16BIT',
-          normalize: true,
-          normalizationFactor: 32767.0,
-        };
-        sampleRate = captureCfg.sampleRate;
-
-        audioinput.start(captureCfg);
-
-        // Listen for audio input events
-        window.addEventListener('audioinput', onAudioInput, false);
-        window.addEventListener('audioinputerror', onAudioInputError, false);
-
-        captureStarted = true;
-        updateButtons();
-        log('✓ Capture started (44.1kHz, Mono, 16-bit)');
+        try {
+          startCaptureEngine(MANUAL_CAPTURE_CFG);
+          log('✓ Capture started (44.1kHz, Mono, 16-bit)');
+        } catch (error) {
+          activeMode = null;
+          captureStarted = false;
+          updateButtons();
+          log('✗ Failed to start capture: ' + error.message);
+        }
       }
 
       function stopCapture() {
+        if (!captureStarted || activeMode !== 'manual') {
+          log('⚠ Manual capture is not running');
+          return;
+        }
+
         log('Stopping audio capture...');
 
-        if (window.audioinput) {
-          audioinput.stop();
-          window.removeEventListener('audioinput', onAudioInput, false);
-          window.removeEventListener(
-            'audioinputerror',
-            onAudioInputError,
-            false,
-          );
-
+        try {
+          stopCaptureEngine();
           const duration = audioBuffer.length / sampleRate;
           log('✓ Capture stopped');
           log(`  Received ${audioDataCount} chunks`);
           log(`  Duration: ${duration.toFixed(2)} seconds`);
           log(`  Samples: ${audioBuffer.length}`);
           log('  Ready for playback!');
+          resetLevelMeter();
+        } catch (error) {
+          log('✗ Failed to stop capture: ' + error.message);
+        }
+      }
+
+      function runBenchmark() {
+        if (captureStarted) {
+          log('⚠ Stop current capture before running a benchmark');
+          return;
         }
 
-        captureStarted = false;
-        startTime = null;
-        updateButtons();
+        let benchmarkCfg;
+        try {
+          benchmarkCfg = parseBenchmarkCfg();
+        } catch (error) {
+          log('✗ ' + error.message);
+          return;
+        }
 
-        // Reset level meter
-        document.getElementById('levelFill').style.width = '0%';
-        document.getElementById('levelValue').textContent = '0%';
+        benchmarkState = emptyBenchmarkState();
+        benchmarkRunId += 1;
+        benchmarkState.runId = benchmarkRunId;
+        benchmarkState.running = true;
+        benchmarkState.config = benchmarkCfg.captureCfg;
+        benchmarkState.durationSec = benchmarkCfg.durationSec;
+
+        activeMode = 'benchmark';
+        audioDataCount = 0;
+        document.getElementById('chunkCount').textContent = '0';
+        document.getElementById('duration').textContent = '0.0s';
+        resetLevelMeter();
+        updateButtons();
+        renderBenchmarkOutput('Starting benchmark...');
+
+        log(
+          `Starting benchmark with ${benchmarkCfg.captureCfg.sampleRate}Hz / ${benchmarkCfg.captureCfg.bufferSize} buffer / ${benchmarkCfg.captureCfg.channels}ch for ${benchmarkCfg.durationSec}s`,
+        );
+
+        try {
+          startCaptureEngine(benchmarkCfg.captureCfg);
+          benchmarkState.timerId = window.setTimeout(function () {
+            stopBenchmark('duration-reached');
+          }, benchmarkCfg.durationSec * 1000);
+          renderBenchmarkRunning();
+          log('✓ Benchmark capture started');
+        } catch (error) {
+          benchmarkState.running = false;
+          activeMode = null;
+          captureStarted = false;
+          updateButtons();
+          renderBenchmarkOutput('Benchmark failed to start.');
+          log('✗ Failed to start benchmark: ' + error.message);
+        }
+      }
+
+      function stopBenchmark(reason = 'manual-stop') {
+        if (!benchmarkState.running || activeMode !== 'benchmark') {
+          if (reason === 'manual-stop') {
+            log('⚠ Benchmark is not running');
+          }
+          return;
+        }
+
+        benchmarkState.running = false;
+        if (benchmarkState.timerId) {
+          clearTimeout(benchmarkState.timerId);
+          benchmarkState.timerId = null;
+        }
+
+        log('Stopping benchmark...');
+
+        try {
+          stopCaptureEngine();
+        } catch (error) {
+          log('✗ Failed to stop benchmark capture cleanly: ' + error.message);
+        }
+
+        const result = buildBenchmarkResult();
+        renderBenchmarkResult(result, reason);
+        resetLevelMeter();
+        document.getElementById('duration').textContent =
+          (result.totals.observedDurationMs / 1000).toFixed(1) + 's';
+        document.getElementById('chunkCount').textContent = String(
+          result.totals.chunks,
+        );
+
+        log(`✓ Benchmark finished (${reason})`);
+        log(
+          `  Interval p95: ${result.intervals.p95Ms}ms, jitter p95: ${result.intervals.p95JitterMs}ms`,
+        );
+        log(
+          `  Busy ratio: ${result.handler.busyRatioPct}%, drift: ${result.totals.driftMs}ms`,
+        );
       }
 
       function onAudioInput(evt) {
-        audioDataCount++;
+        const callbackStartedAt = nowMs();
+        const data = extractAudioData(evt);
+        if (!data) {
+          return;
+        }
 
-        if (evt.data) {
-          // Store audio data for playback
-          audioBuffer = audioBuffer.concat(Array.from(evt.data));
+        if (activeMode === 'benchmark' && benchmarkState.running) {
+          const now = nowMs();
+          if (benchmarkState.firstChunkAtMs === 0) {
+            benchmarkState.firstChunkAtMs = now;
+          }
 
-          // Update level meter
-          updateLevel(evt.data);
+          if (benchmarkState.lastChunkAtMs !== 0) {
+            benchmarkState.intervalsMs.push(now - benchmarkState.lastChunkAtMs);
+          }
 
-          // Update stats
-          updateStats();
+          benchmarkState.lastChunkAtMs = now;
+          benchmarkState.totalChunks += 1;
+          benchmarkState.totalSamples += chunkLength(data);
 
-          // Log periodically
-          if (audioDataCount % 20 === 0) {
-            const duration = audioBuffer.length / sampleRate;
+          audioDataCount = benchmarkState.totalChunks;
+          document.getElementById('chunkCount').textContent = String(
+            audioDataCount,
+          );
+
+          const durationMs = Math.max(
+            benchmarkState.lastChunkAtMs - benchmarkState.firstChunkAtMs,
+            0,
+          );
+          document.getElementById('duration').textContent =
+            (durationMs / 1000).toFixed(1) + 's';
+
+          updateLevel(data);
+
+          if (benchmarkState.totalChunks % 20 === 0) {
+            renderBenchmarkRunning();
             log(
-              `Recording: ${duration.toFixed(1)}s (${audioDataCount} chunks)`,
+              `Benchmark chunk ${benchmarkState.totalChunks} (${(
+                benchmarkState.totalSamples / benchmarkState.config.sampleRate
+              ).toFixed(2)}s audio)`,
             );
           }
+
+          benchmarkState.handlerDurationsMs.push(nowMs() - callbackStartedAt);
+          return;
+        }
+
+        if (activeMode !== 'manual') {
+          return;
+        }
+
+        audioDataCount += 1;
+        audioBuffer = audioBuffer.concat(Array.from(data));
+        updateLevel(data);
+        updateStats();
+
+        if (audioDataCount % 20 === 0) {
+          const duration = audioBuffer.length / sampleRate;
+          log(`Recording: ${duration.toFixed(1)}s (${audioDataCount} chunks)`);
         }
       }
 
       function onAudioInputError(error) {
         log('✗ Audio input error: ' + JSON.stringify(error));
+
+        if (benchmarkState.running && activeMode === 'benchmark') {
+          stopBenchmark('audio-error');
+        }
       }
 
       function playback() {
@@ -380,7 +938,6 @@
         log('▶ Playing back recorded audio...');
 
         try {
-          // Create audio buffer
           const buffer = audioContext.createBuffer(
             1,
             audioBuffer.length,
@@ -388,12 +945,10 @@
           );
           const channelData = buffer.getChannelData(0);
 
-          // Copy audio data
           for (let i = 0; i < audioBuffer.length; i++) {
             channelData[i] = audioBuffer[i];
           }
 
-          // Create source and play
           const source = audioContext.createBufferSource();
           source.buffer = buffer;
           source.connect(audioContext.destination);
@@ -408,12 +963,11 @@
               (audioBuffer.length / sampleRate).toFixed(2) +
               ' seconds of audio',
           );
-        } catch (e) {
-          log('✗ Playback error: ' + e.message);
+        } catch (error) {
+          log('✗ Playback error: ' + error.message);
         }
       }
 
-      // Device ready event
       document.addEventListener(
         'deviceready',
         function () {
@@ -429,6 +983,8 @@
           } else {
             log('✗ AudioInput plugin NOT found!');
           }
+
+          updateButtons();
         },
         false,
       );

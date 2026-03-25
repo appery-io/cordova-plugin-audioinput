@@ -11,6 +11,7 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
 
     private var audioReceiver: AudioReceiver?
     private var fileUrl: String?
+    private let processingQueue = DispatchQueue(label: "com.exelerus.audioinput.processing", qos: .userInitiated)
 
     private var sampleRate: Int32 = 44100
     private var bufferSize: Int32 = 16384
@@ -19,6 +20,8 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
     private var audioSourceType: Int32 = 0
     private var normalize: Bool = true
     private var normalizationFactor: Double = 32767.0
+    private var isCapturingState: Bool = false
+    private var lastFinishedFileUrl: String?
 
     @objc func initialize(_ call: CAPPluginCall) {
         sampleRate = Int32(call.getInt("sampleRate") ?? 44100)
@@ -30,6 +33,7 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
         normalizationFactor = call.getDouble("normalizationFactor") ?? 32767.0
         fileUrl = call.getString("fileUrl")
 
+        emitStateChange("idle")
         call.resolve()
     }
 
@@ -76,10 +80,12 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
             normalizationFactor = normFactor
         }
         fileUrl = call.getString("fileUrl")
+        lastFinishedFileUrl = nil
 
         // Check permission
         let status = AVAudioSession.sharedInstance().recordPermission
         if status != .granted {
+            emitStateChange("error", "Microphone permission not granted")
             call.reject("Microphone permission not granted")
             return
         }
@@ -102,6 +108,8 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
 
         audioReceiver?.delegate = self
         audioReceiver?.start()
+        isCapturingState = true
+        emitStateChange("capturing")
 
         call.resolve()
     }
@@ -109,49 +117,126 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
     @objc func stop(_ call: CAPPluginCall) {
         audioReceiver?.stop()
         audioReceiver = nil
-        call.resolve()
+        isCapturingState = false
+        emitStateChange("stopped")
+        call.resolve([
+            "fileUrl": lastFinishedFileUrl ?? fileUrl ?? NSNull()
+        ])
+    }
+
+    @objc func isCapturing(_ call: CAPPluginCall) {
+        call.resolve(["capturing": isCapturingState])
+    }
+
+    @objc func getCfg(_ call: CAPPluginCall) {
+        call.resolve(buildCfg())
     }
 
     // MARK: - AudioReceiverProtocol delegate methods
 
-    public func didReceiveAudioData(_ data: UnsafeMutablePointer<Int16>!, dataLength length: Int32) {
-        DispatchQueue.main.async { [weak self] in
+    public func didReceiveAudioData(_ data: Data!, dataLength length: Int32) {
+        guard let data = data, !data.isEmpty else { return }
+
+        processingQueue.async { [weak self] in
             guard let self = self else { return }
+
+            let availableSamples = data.count / MemoryLayout<Int16>.size
+            let sampleCount = min(Int(length), availableSamples)
+            if sampleCount <= 0 { return }
+            let timestamp = Date().timeIntervalSince1970 * 1000
+            let chunkMetadata: [String: Any] = [
+                "sampleRate": self.sampleRate,
+                "channels": self.channels,
+                "format": self.format,
+                "timestamp": timestamp
+            ]
 
             if self.normalize {
                 var samples: [Double] = []
-                for i in 0..<Int(length) {
-                    samples.append(Double(data[i]) / self.normalizationFactor)
+                samples.reserveCapacity(sampleCount)
+                data.withUnsafeBytes { rawBuffer in
+                    let pcmBuffer = rawBuffer.bindMemory(to: Int16.self)
+                    for i in 0..<sampleCount {
+                        let sample = Int16(littleEndian: pcmBuffer[i])
+                        samples.append(Double(sample) / self.normalizationFactor)
+                    }
                 }
-                self.notifyListeners("audioData", data: ["data": samples])
+                DispatchQueue.main.async { [weak self] in
+                    var payload = chunkMetadata
+                    payload["data"] = samples
+                    self?.notifyListeners("audioData", data: payload)
+                }
             } else {
-                var samples: [Int16] = []
-                for i in 0..<Int(length) {
-                    samples.append(data[i])
+                var samples: [Int] = []
+                samples.reserveCapacity(sampleCount)
+                data.withUnsafeBytes { rawBuffer in
+                    let pcmBuffer = rawBuffer.bindMemory(to: Int16.self)
+                    for i in 0..<sampleCount {
+                        let sample = Int16(littleEndian: pcmBuffer[i])
+                        samples.append(Int(sample))
+                    }
                 }
-                self.notifyListeners("audioData", data: ["data": samples])
+                DispatchQueue.main.async { [weak self] in
+                    var payload = chunkMetadata
+                    payload["data"] = samples
+                    self?.notifyListeners("audioData", data: payload)
+                }
             }
         }
     }
 
     public func didEncounterError(_ msg: String!) {
         DispatchQueue.main.async { [weak self] in
+            let message = msg ?? "Unknown error"
             self?.notifyListeners("audioError", data: [
-                "message": msg ?? "Unknown error"
+                "message": message,
+                "code": "NATIVE_AUDIO_ERROR"
             ])
+            self?.emitStateChange("error", message)
         }
     }
 
     public func didFinish(_ url: String!) {
+        lastFinishedFileUrl = url
+        isCapturingState = false
         DispatchQueue.main.async { [weak self] in
             self?.notifyListeners("audioInputFinished", data: [
-                "fileUrl": url ?? ""
+                "fileUrl": url ?? "",
+                "timestamp": Date().timeIntervalSince1970 * 1000
             ])
+            self?.emitStateChange("stopped")
         }
     }
 
     deinit {
         audioReceiver?.stop()
         audioReceiver = nil
+    }
+
+    private func emitStateChange(_ state: String, _ message: String? = nil) {
+        var payload: [String: Any] = [
+            "state": state,
+            "timestamp": Date().timeIntervalSince1970 * 1000
+        ]
+        if let message = message {
+            payload["message"] = message
+        }
+        notifyListeners("stateChange", data: payload)
+    }
+
+    private func buildCfg() -> [String: Any] {
+        var cfg: [String: Any] = [
+            "sampleRate": sampleRate,
+            "bufferSize": bufferSize,
+            "channels": channels,
+            "format": format,
+            "audioSourceType": audioSourceType,
+            "normalize": normalize,
+            "normalizationFactor": normalizationFactor
+        ]
+        if let fileUrl = fileUrl {
+            cfg["fileUrl"] = fileUrl
+        }
+        return cfg
     }
 }

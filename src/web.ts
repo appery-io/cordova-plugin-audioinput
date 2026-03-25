@@ -5,6 +5,7 @@ import type {
   AudioInputOptions,
   AudioDataEvent,
   AudioErrorEvent,
+  AudioStateEvent,
 } from './definitions';
 
 /**
@@ -17,17 +18,36 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
   private scriptProcessor: ScriptProcessorNode | null = null;
   private micGainNode: GainNode | null = null;
   private capturing = false;
+  private hasMicrophonePermission = false;
   private options: AudioInputOptions = {};
 
   async initialize(options: AudioInputOptions): Promise<void> {
     this.options = { ...this.options, ...options };
+    this.emitStateChange('idle');
     return Promise.resolve();
   }
 
   async checkMicrophonePermission(): Promise<{ granted: boolean }> {
-    // In web, we can only check after requesting
-    // Return true if we already have a stream
-    return { granted: this.mediaStream !== null };
+    if (this.mediaStream !== null || this.hasMicrophonePermission) {
+      return { granted: true };
+    }
+
+    if (navigator.permissions?.query) {
+      try {
+        const status = await navigator.permissions.query({
+          name: 'microphone' as PermissionName,
+        });
+        const granted = status.state === 'granted';
+        if (granted) {
+          this.hasMicrophonePermission = true;
+        }
+        return { granted };
+      } catch {
+        // Fall through to cached permission state.
+      }
+    }
+
+    return { granted: this.hasMicrophonePermission };
   }
 
   async getMicrophonePermission(): Promise<{ granted: boolean }> {
@@ -37,6 +57,7 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
       // We got permission, but we'll close this stream for now
       // It will be reopened in start()
       stream.getTracks().forEach(track => track.stop());
+      this.hasMicrophonePermission = true;
 
       return { granted: true };
     } catch (error) {
@@ -53,6 +74,7 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
     if (options) {
       this.options = { ...this.options, ...options };
     }
+    this.warnUnsupportedOptions();
 
     try {
       // Request microphone access
@@ -63,6 +85,7 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
           noiseSuppression: false,
         },
       });
+      this.hasMicrophonePermission = true;
 
       // Create audio context
       const AudioContext =
@@ -88,8 +111,16 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
 
         const inputData = event.inputBuffer.getChannelData(0);
         const samples = this.processSamples(inputData);
+        const format = this.options.format || 'PCM_16BIT';
+        const sampleRate = this.audioContext ? this.audioContext.sampleRate : 0;
 
-        this.notifyListeners('audioData', { data: samples } as AudioDataEvent);
+        this.notifyListeners('audioData', {
+          data: samples,
+          sampleRate,
+          channels: 1,
+          format,
+          timestamp: Date.now(),
+        } as AudioDataEvent);
       };
 
       // Connect the audio graph
@@ -98,10 +129,13 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
       this.scriptProcessor.connect(this.audioContext.destination);
 
       this.capturing = true;
+      this.emitStateChange('capturing');
     } catch (error: any) {
-      this.notifyListeners('audioError', {
-        message: error.message || 'Failed to start audio capture',
-      } as AudioErrorEvent);
+      this.emitError(error.message || 'Failed to start audio capture');
+      this.emitStateChange(
+        'error',
+        error.message || 'Failed to start audio capture',
+      );
       throw error;
     }
   }
@@ -129,7 +163,16 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
       this.audioContext = null;
     }
 
+    this.emitStateChange('stopped');
     return {};
+  }
+
+  async isCapturing(): Promise<{ capturing: boolean }> {
+    return { capturing: this.capturing };
+  }
+
+  async getCfg(): Promise<AudioInputOptions> {
+    return { ...this.options };
   }
 
   /**
@@ -150,6 +193,40 @@ export class AudioInputWeb extends WebPlugin implements AudioInputPlugin {
         output[i] = Math.floor(sample * normalizationFactor);
       }
       return output;
+    }
+  }
+
+  private emitStateChange(
+    state: AudioStateEvent['state'],
+    message?: string,
+  ): void {
+    this.notifyListeners('stateChange', {
+      state,
+      message,
+      timestamp: Date.now(),
+    } as AudioStateEvent);
+  }
+
+  private emitError(message: string, code?: string): void {
+    this.notifyListeners('audioError', {
+      message,
+      code,
+    } as AudioErrorEvent);
+  }
+
+  private warnUnsupportedOptions(): void {
+    if (this.options.fileUrl) {
+      const message =
+        'Web implementation does not support fileUrl recording; continuing in stream mode.';
+      console.warn(message);
+      this.emitError(message, 'WEB_FILE_RECORDING_UNSUPPORTED');
+    }
+
+    if ((this.options.channels || 1) !== 1) {
+      const message =
+        'Web implementation currently captures mono only; requested channels value is ignored.';
+      console.warn(message);
+      this.emitError(message, 'WEB_CHANNELS_UNSUPPORTED');
     }
   }
 }

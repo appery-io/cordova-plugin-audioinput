@@ -9,4 +9,6 @@ CAP_PLUGIN(AudioInputPlugin, "AudioInput",
            CAP_PLUGIN_METHOD(getMicrophonePermission, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(start, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(stop, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(isCapturing, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(getCfg, CAPPluginReturnPromise);
 )

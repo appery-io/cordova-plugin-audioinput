@@ -47,7 +47,7 @@ typedef struct {
 - (void)pause;
 - (void)dealloc;
 - (AudioReceiver*)init:(int)sampleRate bufferSize:(int)bufferSizeInBytes noOfChannels:(short)channels audioFormat:(NSString*)format sourceType:(int)audioSourceType fileUrl:(NSString*)url;
-- (void)didReceiveAudioData:(short*)samples dataLength:(int)length;
+- (void)didReceiveAudioData:(NSData*)samples dataLength:(int)length;
 - (void)hasError:(int)statusCode:(char*)file:(int)line;
 
 @end
@@ -55,7 +55,8 @@ typedef struct {
 
 @protocol AudioReceiverProtocol
 
-- (void)didReceiveAudioData:(short*)data dataLength:(int)length;
+- (void)didReceiveAudioData:(NSData*)data dataLength:(int)length;
 - (void)didEncounterError:(NSString*)msg;
+- (void)didFinish:(NSString*)url;
 
 @end

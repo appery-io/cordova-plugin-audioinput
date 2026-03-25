@@ -42,6 +42,16 @@ export interface AudioInputPlugin {
   stop(): Promise<{ fileUrl?: string }>;
 
   /**
+   * Check whether the plugin is currently capturing audio.
+   */
+  isCapturing(): Promise<{ capturing: boolean }>;
+
+  /**
+   * Get the currently active capture configuration.
+   */
+  getCfg(): Promise<AudioInputOptions>;
+
+  /**
    * Add a listener for audio data events
    *
    * @param eventName Name of the event to listen for
@@ -75,6 +85,14 @@ export interface AudioInputPlugin {
   addListener(
     eventName: 'audioInputFinished',
     listenerFunc: (event: AudioFinishedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Add a listener for state changes.
+   */
+  addListener(
+    eventName: 'stateChange',
+    listenerFunc: (event: AudioStateEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   /**
@@ -155,6 +173,14 @@ export interface AudioDataEvent {
    * - Float32Array if normalize=true (values -1.0 to 1.0)
    */
   data: number[];
+
+  /**
+   * Metadata describing the emitted chunk.
+   */
+  sampleRate?: number;
+  channels?: number;
+  format?: 'PCM_16BIT' | 'PCM_8BIT';
+  timestamp?: number;
 }
 
 /**
@@ -165,6 +191,11 @@ export interface AudioErrorEvent {
    * Error message
    */
   message: string;
+
+  /**
+   * Optional machine-friendly error code.
+   */
+  code?: string;
 }
 
 /**
@@ -175,6 +206,20 @@ export interface AudioFinishedEvent {
    * File URL where audio was saved
    */
   fileUrl: string;
+
+  /**
+   * Unix timestamp (ms) when the finished event was emitted.
+   */
+  timestamp?: number;
+}
+
+/**
+ * Capture state change event.
+ */
+export interface AudioStateEvent {
+  state: 'idle' | 'capturing' | 'stopped' | 'error';
+  message?: string;
+  timestamp?: number;
 }
 
 /**

@@ -32,14 +32,15 @@ void HandleInputBuffer(void* inUserData,
     long sampleStart = pRecordState->mCurrentPacket;
     long sampleEnd = pRecordState->mCurrentPacket + inBuffer->mAudioDataByteSize / pRecordState->mDataFormat.mBytesPerPacket - 1;
 
-    short* samples = (short*)inBuffer->mAudioData;
+    NSData* copiedSamples = [NSData dataWithBytes:inBuffer->mAudioData
+                                           length:inBuffer->mAudioDataByteSize];
     long nsamples = sampleEnd - sampleStart + 1;
 
     pRecordState->mCurrentPacket += inNumPackets;
 
     AudioQueueEnqueueBuffer(pRecordState->mQueue, inBuffer, 0, NULL);
 
-    [pRecordState->mSelf didReceiveAudioData:samples dataLength:(int)nsamples];
+    [pRecordState->mSelf didReceiveAudioData:copiedSamples dataLength:(int)nsamples];
 }
 
 
@@ -250,7 +251,7 @@ void HandleInputBuffer(void* inUserData,
 /**
     Forward sample data
  */
-- (void)didReceiveAudioData:(short*)samples dataLength:(int)length {
+- (void)didReceiveAudioData:(NSData*)samples dataLength:(int)length {
     [self.delegate didReceiveAudioData:samples dataLength:length];
 }
 
