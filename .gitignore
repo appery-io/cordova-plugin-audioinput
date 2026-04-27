@@ -29,6 +29,11 @@ Pods/
 Podfile.lock
 *.hmap
 
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
 # Capacitor
 .capacitor/
 
@@ -49,6 +54,7 @@ Podfile.lock
 !tsconfig.json
 !rollup.config.js
 !AudioInput.podspec
+!Package.swift
 !CODE_OF_CONDUCT.md
 !.github/
 package-lock.json

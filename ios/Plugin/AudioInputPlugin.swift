@@ -2,12 +2,19 @@ import Foundation
 import Capacitor
 import AVFoundation
 
-/**
- * Capacitor plugin for audio input capture
- * Thin wrapper around the existing AudioReceiver Objective-C class
- */
 @objc(AudioInputPlugin)
-public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
+public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin, AudioReceiverDelegate {
+    public let identifier = "AudioInputPlugin"
+    public let jsName = "AudioInput"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "initialize", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "checkMicrophonePermission", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getMicrophonePermission", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isCapturing", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getCfg", returnType: CAPPluginReturnPromise),
+    ]
 
     private var audioReceiver: AudioReceiver?
     private var fileUrl: String?
@@ -39,8 +46,7 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
 
     @objc func checkMicrophonePermission(_ call: CAPPluginCall) {
         let status = AVAudioSession.sharedInstance().recordPermission
-        let granted = status == .granted
-        call.resolve(["granted": granted])
+        call.resolve(["granted": status == .granted])
     }
 
     @objc func getMicrophonePermission(_ call: CAPPluginCall) {
@@ -57,32 +63,16 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
     }
 
     @objc func start(_ call: CAPPluginCall) {
-        // Update options if provided
-        if let sr = call.getInt("sampleRate") {
-            sampleRate = Int32(sr)
-        }
-        if let bs = call.getInt("bufferSize") {
-            bufferSize = Int32(bs)
-        }
-        if let ch = call.getInt("channels") {
-            channels = Int16(ch)
-        }
-        if let fmt = call.getString("format") {
-            format = fmt
-        }
-        if let ast = call.getInt("audioSourceType") {
-            audioSourceType = Int32(ast)
-        }
-        if let norm = call.getBool("normalize") {
-            normalize = norm
-        }
-        if let normFactor = call.getDouble("normalizationFactor") {
-            normalizationFactor = normFactor
-        }
+        if let sr = call.getInt("sampleRate") { sampleRate = Int32(sr) }
+        if let bs = call.getInt("bufferSize") { bufferSize = Int32(bs) }
+        if let ch = call.getInt("channels") { channels = Int16(ch) }
+        if let fmt = call.getString("format") { format = fmt }
+        if let ast = call.getInt("audioSourceType") { audioSourceType = Int32(ast) }
+        if let norm = call.getBool("normalize") { normalize = norm }
+        if let nf = call.getDouble("normalizationFactor") { normalizationFactor = nf }
         fileUrl = call.getString("fileUrl")
         lastFinishedFileUrl = nil
 
-        // Check permission
         let status = AVAudioSession.sharedInstance().recordPermission
         if status != .granted {
             emitStateChange("error", "Microphone permission not granted")
@@ -90,22 +80,19 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
             return
         }
 
-        // Stop existing receiver if any
         if let receiver = audioReceiver {
             receiver.stop()
             audioReceiver = nil
         }
 
-        // Create and start new receiver (uses existing ObjC class!)
         audioReceiver = AudioReceiver(
-            sampleRate,
+            sampleRate: sampleRate,
             bufferSize: bufferSize,
-            noOfChannels: channels,
+            channels: channels,
             audioFormat: format,
             sourceType: audioSourceType,
             fileUrl: fileUrl
         )
-
         audioReceiver?.delegate = self
         audioReceiver?.start()
         isCapturingState = true
@@ -132,10 +119,10 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
         call.resolve(buildCfg())
     }
 
-    // MARK: - AudioReceiverProtocol delegate methods
+    // MARK: - AudioReceiverDelegate
 
-    public func didReceiveAudioData(_ data: Data!, dataLength length: Int32) {
-        guard let data = data, !data.isEmpty else { return }
+    func didReceiveAudioData(_ data: Data, dataLength length: Int32) {
+        guard !data.isEmpty else { return }
 
         processingQueue.async { [weak self] in
             guard let self = self else { return }
@@ -143,6 +130,7 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
             let availableSamples = data.count / MemoryLayout<Int16>.size
             let sampleCount = min(Int(length), availableSamples)
             if sampleCount <= 0 { return }
+
             let timestamp = Date().timeIntervalSince1970 * 1000
             let chunkMetadata: [String: Any] = [
                 "sampleRate": self.sampleRate,
@@ -152,7 +140,7 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
             ]
 
             if self.normalize {
-                var samples: [Double] = []
+                var samples = [Double]()
                 samples.reserveCapacity(sampleCount)
                 data.withUnsafeBytes { rawBuffer in
                     let pcmBuffer = rawBuffer.bindMemory(to: Int16.self)
@@ -167,7 +155,7 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
                     self?.notifyListeners("audioData", data: payload)
                 }
             } else {
-                var samples: [Int] = []
+                var samples = [Int]()
                 samples.reserveCapacity(sampleCount)
                 data.withUnsafeBytes { rawBuffer in
                     let pcmBuffer = rawBuffer.bindMemory(to: Int16.self)
@@ -185,23 +173,22 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
         }
     }
 
-    public func didEncounterError(_ msg: String!) {
+    func didEncounterError(_ msg: String) {
         DispatchQueue.main.async { [weak self] in
-            let message = msg ?? "Unknown error"
             self?.notifyListeners("audioError", data: [
-                "message": message,
+                "message": msg,
                 "code": "NATIVE_AUDIO_ERROR"
             ])
-            self?.emitStateChange("error", message)
+            self?.emitStateChange("error", msg)
         }
     }
 
-    public func didFinish(_ url: String!) {
+    func didFinish(_ url: String) {
         lastFinishedFileUrl = url
         isCapturingState = false
         DispatchQueue.main.async { [weak self] in
             self?.notifyListeners("audioInputFinished", data: [
-                "fileUrl": url ?? "",
+                "fileUrl": url,
                 "timestamp": Date().timeIntervalSince1970 * 1000
             ])
             self?.emitStateChange("stopped")
@@ -212,6 +199,8 @@ public class AudioInputPlugin: CAPPlugin, AudioReceiverProtocol {
         audioReceiver?.stop()
         audioReceiver = nil
     }
+
+    // MARK: - Private
 
     private func emitStateChange(_ state: String, _ message: String? = nil) {
         var payload: [String: Any] = [
