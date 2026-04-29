@@ -102,7 +102,7 @@ void HandleInputBuffer(void* inUserData,
         _recordState.mDataFormat.mBytesPerPacket =_recordState.mDataFormat.mBytesPerFrame = (_recordState.mDataFormat.mBitsPerChannel / 8) * _recordState.mDataFormat.mChannelsPerFrame;
         _recordState.mDataFormat.mReserved = 0;
         _recordState.mDataFormat.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
-        _recordState.bufferByteSize = (UInt32) MIN(bufferSizeInBytes, maxBufferSize);
+        _recordState.bufferByteSize = (UInt32) MIN(bufferSizeInBytes * _recordState.mDataFormat.mBytesPerPacket, maxBufferSize);
 
         if (url == nil || [url isKindOfClass:[NSNull class]]) {
             _fileUrl = nil;

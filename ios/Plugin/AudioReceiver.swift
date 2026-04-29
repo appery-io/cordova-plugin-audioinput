@@ -99,7 +99,7 @@ class AudioReceiver: NSObject {
         fmt.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked
 
         statePtr.pointee.dataFormat = fmt
-        statePtr.pointee.bufferByteSize = min(UInt32(bufferSize), maxBufferSize)
+        statePtr.pointee.bufferByteSize = min(UInt32(bufferSize) * fmt.mBytesPerPacket, maxBufferSize)
 
         if let urlString = urlString {
             fileUrl = URL(string: urlString)

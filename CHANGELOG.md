@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-04-29
+
+### Fixed
+- **iOS bufferSize interpreted as bytes instead of samples** — `evt.data.length` was half the expected value on iOS compared to Android for the same `bufferSize`. iOS now correctly treats `bufferSize` as sample count, matching Android behavior. Affects both Capacitor (Swift) and Cordova (ObjC) implementations.
+
+## [2.2.0] - 2026-04-27
+
+### Added
+- **Capacitor 8 / SPM support** — Added `Package.swift` for Swift Package Manager resolution in Capacitor 8 projects.
+- **iOS audio engine rewritten in Swift** — Replaced ObjC `AudioReceiver.m` with `AudioReceiver.swift` using `CAPBridgedPlugin` protocol (required for SPM single-language target).
+
+### Changed
+- Updated podspec to exclude `src/ios/` from Capacitor builds (CocoaPods still works for Cap 6/7).
+
 ## [2.1.2] - 2026-03-25
 
 ### Fixed
