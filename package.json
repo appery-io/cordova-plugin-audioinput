@@ -47,7 +47,6 @@
     "swiftlint": "node-swiftlint",
     "docgen": "docgen --api AudioInputPlugin --output-readme README.md --output-json dist/docs.json",
     "build": "npm run clean && tsc && rollup -c rollup.config.js",
-    "prepare": "npm run build",
     "clean": "rimraf ./dist",
     "watch": "tsc --watch",
     "prepublishOnly": "npm run build"
